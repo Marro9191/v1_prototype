@@ -4,6 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
 import requests
+import json
 
 # Add sidebar with menu items
 st.sidebar.title("Navigation")
@@ -17,32 +18,67 @@ except KeyError:
     st.error("Please add your OpenAI API key to `.streamlit/secrets.toml` under the key `openai.api_key`.")
     st.stop()
 
-# Function to fetch Shopify products
+# Function to fetch Shopify products using GraphQL
 def fetch_shopify_products():
     try:
         shopify_domain = st.secrets["shopify"]["domain"]
-        api_key = st.secrets["shopify"]["api_key"]
-        password = st.secrets["shopify"]["password"]
-        api_version = "2023-10"
+        access_token = st.secrets["shopify"]["access_token"]  # Use access token for GraphQL
+        api_version = "2024-10"  # Latest stable version as of March 2025
 
-        url = f"https://{api_key}:{password}@{shopify_domain}/admin/api/{api_version}/products.json"
-        response = requests.get(url)
+        url = f"https://{shopify_domain}/admin/api/{api_version}/graphql.json"
+        headers = {
+            "Content-Type": "application/json",
+            "X-Shopify-Access-Token": access_token
+        }
+        
+        # GraphQL query
+        query = """
+        query {
+          products(first: 100) {
+            edges {
+              node {
+                id
+                title
+                productType
+                variants(first: 10) {
+                  edges {
+                    node {
+                      id
+                      sku
+                      price
+                      inventoryQuantity
+                    }
+                  }
+                }
+                createdAt
+                updatedAt
+              }
+            }
+          }
+        }
+        """
+        
+        response = requests.post(url, headers=headers, json={"query": query})
         response.raise_for_status()
-
-        products = response.json()["products"]
+        
+        data = response.json()["data"]["products"]["edges"]
+        
+        # Flatten the GraphQL response into a DataFrame
         product_data = []
-        for product in products:
-            for variant in product["variants"]:
+        for edge in data:
+            product = edge["node"]
+            for variant_edge in product["variants"]["edges"]:
+                variant = variant_edge["node"]
                 product_data.append({
                     "product_id": product["id"],
                     "title": product["title"],
                     "variant_id": variant["id"],
                     "sku": variant["sku"],
                     "price": float(variant["price"]),
-                    "inventory_quantity": variant["inventory_quantity"],
-                    "created_at": pd.to_datetime(product["created_at"]),
-                    "updated_at": pd.to_datetime(product["updated_at"]),
-                    "category": product.get("product_type", "Uncategorized")
+                    "inventory_quantity": variant["inventoryQuantity"],
+                    "created_at": pd.to_datetime(product["createdAt"]),
+                    "updated_at": pd.to_datetime(product["updatedAt"]),
+                    "category": product["productType"] or "Uncategorized"
                 })
         return pd.DataFrame(product_data)
     except Exception as e:
@@ -155,7 +191,7 @@ if menu == "Insight Conversation":
         else:
             st.warning("The uploaded data is empty.")
 
-# Shopify Catalog Analysis (Updated to Match Original Principles)
+# Shopify Catalog Analysis (Updated with GraphQL and Matching Principles)
 elif menu == "Shopify Catalog Analysis":
     st.title("🛒 Shopify Catalog Analysis")
     st.write(
@@ -163,15 +199,13 @@ elif menu == "Shopify Catalog Analysis":
         "Data is fetched directly from your Shopify store when you submit a question."
     )
 
-    # Question input
     question = st.text_area(
         "Ask a question about your Shopify catalog!",
         placeholder="Example: What were total number of products updated last month compared to this month for Electronics category?",
     )
 
     if question:
-        # Fetch Shopify data when question is submitted
-        with st.spinner("Fetching Shopify catalog data..."):
+        with st.spinner("Fetching Shopify catalog data via GraphQL..."):
             df = fetch_shopify_products()
 
         if df.empty:
@@ -183,7 +217,7 @@ elif menu == "Shopify Catalog Analysis":
             st.subheader("Response")
             st.write_stream(stream)
 
-            # Custom analysis for product updates comparison (mimicking review comparison)
+            # Custom analysis for product updates comparison
             if "last month" in question.lower() and "this month" in question.lower():
                 current_date = datetime.now()
                 current_month = current_date.month
@@ -203,8 +237,8 @@ elif menu == "Shopify Catalog Analysis":
                     (df_filtered['updated_at'].dt.year == last_month_year)
                 ]
 
-                this_month_count = this_month_data.shape[0]  # Count of products updated this month
-                last_month_count = last_month_data.shape[0]  # Count of products updated last month
+                this_month_count = this_month_data.shape[0]
+                last_month_count = last_month_data.shape[0]
 
                 st.subheader("Analysis Results")
                 st.write(f"Total Products Updated This Month: {this_month_count}")
@@ -222,7 +256,7 @@ elif menu == "Shopify Catalog Analysis":
                 )
                 st.plotly_chart(fig)
 
-            # General visualization options (same as Insight Conversation)
+            # General visualization options
             st.subheader("Custom Visualization")
             if not df.empty:
                 chart_type = st.selectbox("Chart Type", ["Bar", "Line", "Pie", "Scatter", "Area"])
