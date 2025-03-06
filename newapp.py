@@ -417,6 +417,7 @@ elif menu == "Shopify Catalog Analysis":
                 # Filter products with inventory_quantity = 0
                 out_of_stock = df[df['inventory_quantity'] == 0]
                 out_of_stock_count = len(out_of_stock)
+                in_stock_count = len(df[df['inventory_quantity'] > 0])
 
                 if out_of_stock_count > 0:
                     out_of_stock_list = out_of_stock[['title', 'sku']].drop_duplicates().to_dict('records')
@@ -427,6 +428,24 @@ elif menu == "Shopify Catalog Analysis":
                 else:
                     st.subheader("Analysis Results")
                     st.write("Great news! There are no products out of stock right now.")
+
+                # Generate pie chart for in-stock vs out-of-stock
+                fig = go.Figure(data=[
+                    go.Pie(
+                        labels=['In Stock', 'Out of Stock'],
+                        values=[in_stock_count, out_of_stock_count],
+                        marker_colors=['#4ECDC4', '#FF6B6B'],
+                        textinfo='label+percent',
+                        hole=0.3
+                    )
+                ])
+                fig.update_layout(
+                    title="Stock Status: In Stock vs Out of Stock",
+                    height=500,
+                    width=700,
+                    showlegend=True
+                )
+                st.plotly_chart(fig)
 
             # Custom analysis for product updates comparison
             elif "last month" in question.lower() and "this month" in question.lower():
