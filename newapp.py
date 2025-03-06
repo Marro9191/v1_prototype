@@ -116,94 +116,110 @@ default_csv_data = """﻿date,image,SKU,promo,category,product,performance,retur
 09/03/2025,,31,445667,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,34,31
 10/03/2025,,32,2234,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,31,32"""
 
-# Main chatbot interface
-st.title("📝 Comcore Chatbot")
-st.write("Welcome! Ask me analytical questions about your Shopify catalog or CSV data. I’ll respond with insights and visuals when applicable.")
+# Initialize chat history
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-# Initialize session state for chat history and data
-if 'chat_history' not in st.session_state:
-    st.session_state.chat_history = []
-if 'shopify_df' not in st.session_state:
-    st.session_state.shopify_df = None
-if 'insight_df' not in st.session_state:
-    st.session_state.insight_df = pd.read_csv(io.StringIO(default_csv_data))
-
-# Fetch Shopify data once and store in session state
-if st.session_state.shopify_df is None:
-    with st.spinner("Fetching Shopify catalog data via GraphQL..."):
-        st.session_state.shopify_df = fetch_shopify_products()
-
-# Display chat history
-for message in st.session_state.chat_history:
+# Display chat messages
+for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.write(message["content"])
 
-# User input
-user_input = st.chat_input("Type your question here...")
-
-if user_input:
-    # Add user message to chat history
-    st.session_state.chat_history.append({"role": "user", "content": user_input})
+# Chat input
+if prompt := st.chat_input("Ask me anything about your data or Shopify catalog!"):
+    st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
-        st.write(user_input)
+        st.write(prompt)
 
-    # Prepare response based on context (Shopify or Insight)
-    df = st.session_state.shopify_df if "shopify" in user_input.lower() else st.session_state.insight_df
-    if df is not None and not df.empty:
-        document = df.to_string()
+    # Fetch data based on context
+    if any(keyword in prompt.lower() for keyword in ["review", "sales", "month", "toothbrush", "hygiene"]):
+        # Insight Conversation context
+        if "df" not in st.session_state:
+            df = pd.read_csv(io.StringIO(default_csv_data))
+            st.session_state.df = df
+        else:
+            df = st.session_state.df
 
-        # Default OpenAI prompt
-        messages = [
-            {"role": "system", "content": "You are a helpful assistant that provides friendly and concise responses to analytical questions about product data. Include insights or visualizations when applicable."},
-            {"role": "user", "content": f"Here's the data: {document} \n\n---\n\n {user_input}"}
-        ]
+        df['date'] = pd.to_datetime(df['date'], format='%d/%m/%Y', errors='coerce')
+        if df['date'].isna().all():
+            st.warning("No valid dates found in the 'date' column. Please ensure dates are in DD/MM/YYYY format.")
+            st.stop()
+        st.write(f"Loaded {len(df)} rows from CSV.")  # Debug row count
+        df['month_year'] = df['date'].dt.strftime('%B %Y')
+        df['category'] = df['category'].str.lower().replace("tootbrush", "toothbrush")
 
-        # Customize response based on specific queries
-        if "which products are out of stock" in user_input.lower() and "how many" in user_input.lower():
-            out_of_stock = df[df['inventory_quantity'] == 0]
-            out_of_stock_count = len(out_of_stock)
-            in_stock_count = len(df[df['inventory_quantity'] > 0])
-            out_of_stock_list = out_of_stock[['title', 'sku']].drop_duplicates().to_dict('records')
+        category_filter = None
+        if "toothbrush" in prompt.lower():
+            category_filter = "toothbrush"
+        elif "all categories" in prompt.lower() or "all" in prompt.lower():
+            category_filter = None
+        df_filtered = df if category_filter is None else df[df['category'] == category_filter]
 
-            response_content = f"Hey there! We’ve checked your stock, and here are the products currently out of stock: {', '.join([f'{item['title']} (SKU: {item['sku']})' for item in out_of_stock_list]) if out_of_stock_count > 0 else 'great news—there are no products out of stock right now!'}. Time to restock if needed!"
-            messages[1]["content"] = f"Here's the data: {document} \n\n---\n\n {user_input} Respond with: {response_content}"
+        # Process the query
+        if "total number of reviews per month" in prompt.lower():
+            monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
+            openai_data = monthly_reviews.to_string()
+            messages = [
+                {
+                    "role": "user",
+                    "content": (
+                        f"Based on the provided data, provide a friendly and concise summary of the total number of reviews per month for all categories. "
+                        f"Use the following grouped data with columns: {list(monthly_reviews.columns)}. "
+                        f"Data:\n{openai_data}\n\n---\n\n {prompt} (e.g., 'Hey! The data shows a peak in January 2025 with 3000 reviews for Toothbrush!')"
+                    )
+                }
+            ]
+            response = client.chat.completions.create(model="gpt-4o", messages=messages)
+            st.session_state.messages.append({"role": "assistant", "content": response.choices[0].message.content})
+            with st.chat_message("assistant"):
+                st.write(response.choices[0].message.content)
+
+            monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
+            seen = set()
+            unique_results = []
+            for index, row in monthly_reviews.iterrows():
+                key = (row['month_year'], row['category'])
+                if key not in seen:
+                    unique_results.append(row)
+                    seen.add(key)
+            monthly_reviews = pd.DataFrame(unique_results)
 
             with st.chat_message("assistant"):
-                st.write(response_content)
+                st.write("### Analysis Results")
+                st.table(monthly_reviews.style.format({'reviews': '{:,.0f}'}))
 
-            if out_of_stock_count > 0:
-                st.write(f"**Total out-of-stock products:** {out_of_stock_count}")
-                for item in out_of_stock_list:
-                    st.write(f"- {item['title']} (SKU: {item['sku']}) - 0 items in stock")
-            else:
-                st.write("**Great news! No products are out of stock.**")
-
-            # Generate pie chart
-            fig = go.Figure(data=[
-                go.Pie(
-                    labels=['In Stock', 'Out of Stock'],
-                    values=[in_stock_count, out_of_stock_count],
-                    marker_colors=['#4ECDC4', '#FF6B6B'],
-                    textinfo='label+percent',
-                    hole=0.3
-                )
-            ])
+            colors = {'toothbrush': '#FF6B6B', 'hygiene': '#4ECDC4'}
+            data_traces = []
+            unique_months = sorted(monthly_reviews['month_year'].unique())
+            for cat in monthly_reviews['category'].unique():
+                cat_data = monthly_reviews[monthly_reviews['category'] == cat]
+                data_traces.append(go.Bar(
+                    x=unique_months,
+                    y=[cat_data[cat_data['month_year'] == month]['reviews'].sum() if month in cat_data['month_year'].values else 0 for month in unique_months],
+                    name=cat.capitalize(),
+                    marker_color=colors.get(cat, '#45B7D1')
+                ))
+            fig = go.Figure(data=data_traces)
             fig.update_layout(
-                title="Stock Status: In Stock vs Out of Stock",
+                title=f"Total Reviews Per Month by {'Toothbrush' if category_filter == 'toothbrush' else 'Category'}",
+                xaxis_title="Month",
+                yaxis_title="Number of Reviews",
                 height=500,
                 width=700,
+                barmode='group',
                 showlegend=True
             )
-            st.plotly_chart(fig)
+            with st.chat_message("assistant"):
+                st.plotly_chart(fig)
 
-        elif "last month" in user_input.lower() and "this month" in user_input.lower() and "reviews" in user_input.lower():
+        elif "reviews" in prompt.lower() and ("last month" in prompt.lower() or "this month" in prompt.lower()):
             current_date = datetime.now()
             current_month = current_date.month
             current_year = current_date.year
             last_month_year = current_year - 1 if current_month == 1 else current_year
             last_month = 12 if current_month == 1 else current_month - 1
 
-            category = "toothbrush" if "toothbrush" in user_input.lower() else None
+            category = "toothbrush" if "toothbrush" in prompt.lower() else None
             df_filtered = df[df['category'].str.lower().str.contains("toot?brush", na=False)] if category else df
 
             this_month_data = df_filtered[
@@ -218,14 +234,26 @@ if user_input:
             this_month_reviews = this_month_data['reviews'].sum() if 'reviews' in this_month_data.columns else 0
             last_month_reviews = last_month_data['reviews'].sum() if 'reviews' in last_month_data.columns else 0
 
-            response_content = f"The total number of reviews for the {category or 'all'} category last month was {last_month_reviews}, compared to {this_month_reviews} this month!"
-            messages[1]["content"] = f"Here's the data: {document} \n\n---\n\n {user_input} Respond with: {response_content}"
+            messages = [
+                {
+                    "role": "user",
+                    "content": (
+                        f"Provide a friendly and concise comparison of the total number of reviews for the {category_filter or 'all'} category "
+                        f"between last month and this month. The data shows last month had {last_month_reviews} reviews, "
+                        f"and this month had {this_month_reviews} reviews. "
+                        f"Example: 'Hey! Last month had {last_month_reviews} reviews, while this month has {this_month_reviews} for the toothbrush category!'"
+                    )
+                }
+            ]
+            response = client.chat.completions.create(model="gpt-4o", messages=messages)
+            st.session_state.messages.append({"role": "assistant", "content": response.choices[0].message.content})
+            with st.chat_message("assistant"):
+                st.write(response.choices[0].message.content)
 
             with st.chat_message("assistant"):
-                st.write(response_content)
-
-            st.write(f"**This Month:** {this_month_reviews} reviews")
-            st.write(f"**Last Month:** {last_month_reviews} reviews")
+                st.write("### Analysis Results")
+                st.write(f"This Month: {this_month_reviews} reviews")
+                st.write(f"Last Month: {last_month_reviews} reviews")
 
             fig = go.Figure(data=[
                 go.Bar(x=['Last Month', 'This Month'], y=[last_month_reviews, this_month_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
@@ -237,67 +265,222 @@ if user_input:
                 height=500,
                 width=700
             )
-            st.plotly_chart(fig)
+            with st.chat_message("assistant"):
+                st.plotly_chart(fig)
 
-        elif "total number of reviews per month" in user_input.lower():
-            monthly_reviews = df.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
-            openai_data = monthly_reviews.to_string()
-            response_content = f"Here’s a quick look at the total number of reviews per month: {openai_data.split('\n')[1:]}"
-            messages[1]["content"] = f"Here's the data: {document} \n\n---\n\n {user_input} Respond with: {response_content}"
+        elif any(word in prompt.lower() for word in ["most", "least"]):
+            entity = "SKU" if "sku" in prompt.lower() else "product"
+            metric = None
+            for col in df.columns:
+                if any(keyword in col.lower() for keyword in ["sales", "sale"]):
+                    metric = col
+                    break
+            if not metric:
+                metric = "reviews"
+                st.warning(f"Metric '{metric}' used as default since 'sales' not found in the dataset.")
+            group_column = entity.lower() if entity.lower() in df.columns else "SKU"
+            if group_column not in df.columns:
+                st.warning(f"Grouping column '{group_column}' not found in the dataset.")
+                st.stop()
+
+            df['month_year'] = df['date'].dt.strftime('%B %Y')
+            entity_metrics = df.groupby(['month_year', group_column])[metric].sum().reset_index()
+
+            if entity_metrics.empty or entity_metrics[metric].isna().all():
+                st.warning(f"No valid {metric} data available for {entity}s.")
+                st.stop()
 
             with st.chat_message("assistant"):
-                st.write(response_content)
+                st.write("### Analysis Results")
+                for month_year in entity_metrics['month_year'].unique():
+                    month_data = entity_metrics[entity_metrics['month_year'] == month_year]
+                    max_value = month_data[metric].max()
+                    most_entities = month_data[month_data[metric] == max_value][group_column].tolist()
+                    most_entities_str = ", ".join(most_entities) if len(most_entities) > 1 else most_entities[0]
 
-            monthly_reviews = df.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
-            seen = set()
-            unique_results = []
-            for index, row in monthly_reviews.iterrows():
-                key = (row['month_year'], row['category'])
-                if key not in seen:
-                    unique_results.append(row)
-                    seen.add(key)
-            monthly_reviews = pd.DataFrame(unique_results)
+                    min_value = month_data[month_data[metric] > 0][metric].min() if (month_data[metric] > 0).any() else 0
+                    least_entities = month_data[month_data[metric] == min_value][group_column].tolist() if min_value > 0 else [None]
+                    least_entities_str = ", ".join(filter(None, least_entities)) if len(least_entities) > 1 else (least_entities[0] if least_entities[0] else "None")
 
-            st.write("**Monthly Review Breakdown:**")
-            st.table(monthly_reviews.style.format({'reviews': '{:,.0f}'}))
-
-            colors = {'toothbrush': '#FF6B6B', 'hygiene': '#4ECDC4'}
-            data_traces = []
-            unique_months = sorted(monthly_reviews['month_year'].unique())
-
-            for cat in monthly_reviews['category'].unique():
-                cat_data = monthly_reviews[monthly_reviews['category'] == cat]
-                data_traces.append(go.Bar(
-                    x=unique_months,
-                    y=[cat_data[cat_data['month_year'] == month]['reviews'].sum() if month in cat_data['month_year'].values else 0 for month in unique_months],
-                    name=cat.capitalize(),
-                    marker_color=colors.get(cat, '#45B7D1')
-                ))
-
-            fig = go.Figure(data=data_traces)
-            fig.update_layout(
-                title="Total Reviews Per Month by Category",
-                xaxis_title="Month",
-                yaxis_title="Number of Reviews",
-                height=500,
-                width=700,
-                barmode='group',
-                showlegend=True
-            )
-            st.plotly_chart(fig)
+                    st.write(f"{month_year}: Most {metric}: {most_entities_str} ({max_value}), Least {metric}: {least_entities_str} ({min_value if min_value > 0 else 0})")
 
         else:
-            # Default response for other queries
-            stream = client.chat.completions.create(model="gpt-4o", messages=messages, stream=True)
+            messages = [
+                {
+                    "role": "user",
+                    "content": f"I don’t fully understand your question about the data. Could you please ask about reviews, sales, or specific months? For example, 'What were the total number of reviews per month?' or 'Which SKU had the most sales?'"
+                }
+            ]
+            response = client.chat.completions.create(model="gpt-4o", messages=messages)
+            st.session_state.messages.append({"role": "assistant", "content": response.choices[0].message.content})
             with st.chat_message("assistant"):
-                st.write_stream(stream)
+                st.write(response.choices[0].message.content)
 
+    elif any(keyword in prompt.lower() for keyword in ["shopify", "stock", "product", "electronics"]):
+        # Shopify Catalog Analysis context
+        with st.spinner("Fetching Shopify catalog data via GraphQL..."):
+            df = fetch_shopify_products()
+
+        if df.empty:
+            st.session_state.messages.append({"role": "assistant", "content": "Oops! I couldn’t fetch the Shopify data. Please check your API credentials."})
+            with st.chat_message("assistant"):
+                st.write("Oops! I couldn’t fetch the Shopify data. Please check your API credentials.")
+        else:
+            document = df.to_string()
+            if "products are out of stock" in prompt.lower() and "how many" in prompt.lower():
+                out_of_stock = df[df['inventory_quantity'] == 0]
+                out_of_stock_count = len(out_of_stock)
+                in_stock_count = len(df[df['inventory_quantity'] > 0])
+
+                if out_of_stock_count > 0:
+                    out_of_stock_list = out_of_stock[['title', 'sku']].drop_duplicates().to_dict('records')
+                    messages = [
+                        {
+                            "role": "user",
+                            "content": (
+                                f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a friendly and concise response. "
+                                f"List the out-of-stock products with their titles and quantities (0), and say something like 'Hey there! We’ve checked your stock, "
+                                f"and here are the products currently out of stock: [list]. Time to restock!' Avoid technical details unless asked."
+                            )
+                        }
+                    ]
+                    response = client.chat.completions.create(model="gpt-4o", messages=messages)
+                    st.session_state.messages.append({"role": "assistant", "content": response.choices[0].message.content})
+                    with st.chat_message("assistant"):
+                        st.write(response.choices[0].message.content)
+
+                    with st.chat_message("assistant"):
+                        st.write("### Analysis Results")
+                        st.write(f"Total number of out-of-stock products: {out_of_stock_count}")
+                        for item in out_of_stock_list:
+                            st.write(f"- Product: {item['title']} (SKU: {item['sku']}) - 0 items in stock")
+
+                    fig = go.Figure(data=[
+                        go.Pie(
+                            labels=['In Stock', 'Out of Stock'],
+                            values=[in_stock_count, out_of_stock_count],
+                            marker_colors=['#4ECDC4', '#FF6B6B'],
+                            textinfo='label+percent',
+                            hole=0.3
+                        )
+                    ])
+                    fig.update_layout(
+                        title="Stock Status: In Stock vs Out of Stock",
+                        height=500,
+                        width=700,
+                        showlegend=True
+                    )
+                    with st.chat_message("assistant"):
+                        st.plotly_chart(fig)
+
+                else:
+                    messages = [
+                        {
+                            "role": "user",
+                            "content": (
+                                f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a friendly and concise response. "
+                                f"Say something like 'Hey there! We’ve checked your stock, and great news—there are no products out of stock right now!'"
+                            )
+                        }
+                    ]
+                    response = client.chat.completions.create(model="gpt-4o", messages=messages)
+                    st.session_state.messages.append({"role": "assistant", "content": response.choices[0].message.content})
+                    with st.chat_message("assistant"):
+                        st.write(response.choices[0].message.content)
+
+                    with st.chat_message("assistant"):
+                        st.write("### Analysis Results")
+                        st.write("Great news! There are no products out of stock right now.")
+
+                    fig = go.Figure(data=[
+                        go.Pie(
+                            labels=['In Stock', 'Out of Stock'],
+                            values=[in_stock_count, out_of_stock_count],
+                            marker_colors=['#4ECDC4', '#FF6B6B'],
+                            textinfo='label+percent',
+                            hole=0.3
+                        )
+                    ])
+                    fig.update_layout(
+                        title="Stock Status: In Stock vs Out of Stock",
+                        height=500,
+                        width=700,
+                        showlegend=True
+                    )
+                    with st.chat_message("assistant"):
+                        st.plotly_chart(fig)
+
+            elif "last month" in prompt.lower() and "this month" in prompt.lower():
+                current_date = datetime.now()
+                current_month = current_date.month
+                current_year = current_date.year
+                last_month_year = current_year - 1 if current_month == 1 else current_year
+                last_month = 12 if current_month == 1 else current_month - 1
+
+                category = "Electronics" if "electronics" in prompt.lower() else None
+                df_filtered = df[df['category'].str.lower() == category.lower()] if category else df
+
+                this_month_data = df_filtered[
+                    (df_filtered['updated_at'].dt.month == current_month) & 
+                    (df_filtered['updated_at'].dt.year == current_year)
+                ]
+                last_month_data = df_filtered[
+                    (df_filtered['updated_at'].dt.month == last_month) & 
+                    (df_filtered['updated_at'].dt.year == last_month_year)
+                ]
+
+                this_month_count = this_month_data.shape[0]
+                last_month_count = last_month_data.shape[0]
+
+                messages = [
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a friendly and concise response. "
+                            f"The data shows last month had {last_month_count} product updates, and this month has {this_month_count} product updates. "
+                            f"Example: 'Hey! Last month saw {last_month_count} product updates, while this month has {this_month_count} for the {category or 'all'} category!'"
+                        )
+                    }
+                ]
+                response = client.chat.completions.create(model="gpt-4o", messages=messages)
+                st.session_state.messages.append({"role": "assistant", "content": response.choices[0].message.content})
+                with st.chat_message("assistant"):
+                    st.write(response.choices[0].message.content)
+
+                with st.chat_message("assistant"):
+                    st.write("### Analysis Results")
+                    st.write(f"This Month: {this_month_count} products")
+                    st.write(f"Last Month: {last_month_count} products")
+
+                fig = go.Figure(data=[
+                    go.Bar(x=['Last Month', 'This Month'], y=[last_month_count, this_month_count], marker_color=['#FF6B6B', '#4ECDC4'])
+                ])
+                fig.update_layout(
+                    title=f"Product Updates Comparison - {category if category else 'All Categories'}",
+                    xaxis_title="Period",
+                    yaxis_title="Number of Products Updated",
+                    height=500,
+                    width=700
+                )
+                with st.chat_message("assistant"):
+                    st.plotly_chart(fig)
+
+            else:
+                messages = [
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a friendly and concise response. "
+                            f"If the question is unclear, suggest options like 'Hey! You can ask me about stock levels (e.g., Which products are out of stock?) "
+                            f"or product updates (e.g., How many products were updated last month?).'"
+                        )
+                    }
+                ]
+                response = client.chat.completions.create(model="gpt-4o", messages=messages)
+                st.session_state.messages.append({"role": "assistant", "content": response.choices[0].message.content})
+                with st.chat_message("assistant"):
+                    st.write(response.choices[0].message.content)
     else:
+        st.session_state.messages.append({"role": "assistant", "content": "Hmm, I’m not sure where to look! Please ask about your data (e.g., reviews or sales) or Shopify catalog (e.g., stock levels)."})
         with st.chat_message("assistant"):
-            st.write("Sorry, I couldn’t fetch the data. Please check your API credentials or try again later.")
-
-    # Add assistant message to chat history
-    if 'response_content' in locals():
-        st.session_state.chat_history.append({"role": "assistant", "content": response_content})
-    else:
-        st.session_state.chat_history.append({"role": "assistant", "content": "".join([msg for msg in st.session_state.chat_history[-1]["content"] if hasattr(msg, 'content')])})
+            st.write("Hmm, I’m not sure where to look! Please ask about your data (e.g., reviews or sales) or Shopify catalog (e.g., stock levels).")
