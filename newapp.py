@@ -116,24 +116,33 @@ default_csv_data = """﻿date,image,SKU,promo,category,product,performance,retur
 09/03/2025,,31,445667,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,34,31
 10/03/2025,,32,2234,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,31,32"""
 
-# Initialize chat history
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+# Add sidebar with menu items
+st.sidebar.title("Navigation")
+menu = st.sidebar.radio("Menu", ["Insight Conversation", "Shopify Catalog Analysis"])
 
-# Display chat messages
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.write(message["content"])
+# Initialize chat history for each tab
+if "messages_insight" not in st.session_state:
+    st.session_state.messages_insight = []
+if "messages_shopify" not in st.session_state:
+    st.session_state.messages_shopify = []
 
-# Chat input
-if prompt := st.chat_input("Ask me anything about your data or Shopify catalog!"):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.write(prompt)
+# Display chat interface based on selected tab
+if menu == "Insight Conversation":
+    st.title("📄 Comcore Prototype v1")
+    st.write("Chat with me about your data! Ask about reviews, sales, or specific months. Default data is pre-loaded.")
 
-    # Fetch data based on context
-    if any(keyword in prompt.lower() for keyword in ["review", "sales", "month", "toothbrush", "hygiene"]):
-        # Insight Conversation context
+    # Display chat messages for Insight Conversation
+    for message in st.session_state.messages_insight:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+
+    # Chat input for Insight Conversation
+    if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
+        st.session_state.messages_insight.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.write(prompt)
+
+        # Load and process data
         if "df" not in st.session_state:
             df = pd.read_csv(io.StringIO(default_csv_data))
             st.session_state.df = df
@@ -170,7 +179,7 @@ if prompt := st.chat_input("Ask me anything about your data or Shopify catalog!"
                 }
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
-            st.session_state.messages.append({"role": "assistant", "content": response.choices[0].message.content})
+            st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
             with st.chat_message("assistant"):
                 st.write(response.choices[0].message.content)
 
@@ -246,7 +255,7 @@ if prompt := st.chat_input("Ask me anything about your data or Shopify catalog!"
                 }
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
-            st.session_state.messages.append({"role": "assistant", "content": response.choices[0].message.content})
+            st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
             with st.chat_message("assistant"):
                 st.write(response.choices[0].message.content)
 
@@ -308,21 +317,34 @@ if prompt := st.chat_input("Ask me anything about your data or Shopify catalog!"
             messages = [
                 {
                     "role": "user",
-                    "content": f"I don’t fully understand your question about the data. Could you please ask about reviews, sales, or specific months? For example, 'What were the total number of reviews per month?' or 'Which SKU had the most sales?'"
+                    "content": f"Provide a friendly response. I don’t fully understand your question about the data. Could you please ask about reviews, sales, or specific months? For example, 'What were the total number of reviews per month?' or 'Which SKU had the most sales?'"
                 }
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
-            st.session_state.messages.append({"role": "assistant", "content": response.choices[0].message.content})
+            st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
             with st.chat_message("assistant"):
                 st.write(response.choices[0].message.content)
 
-    elif any(keyword in prompt.lower() for keyword in ["shopify", "stock", "product", "electronics"]):
-        # Shopify Catalog Analysis context
+elif menu == "Shopify Catalog Analysis":
+    st.title("🛒 Shopify Catalog Analysis")
+    st.write("Chat with me about your Shopify catalog! Ask about stock levels or product updates.")
+
+    # Display chat messages for Shopify Catalog Analysis
+    for message in st.session_state.messages_shopify:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+
+    # Chat input for Shopify Catalog Analysis
+    if prompt := st.chat_input("Ask me about your Shopify catalog! (e.g., 'Which products are out of stock, and how many?')"):
+        st.session_state.messages_shopify.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.write(prompt)
+
         with st.spinner("Fetching Shopify catalog data via GraphQL..."):
             df = fetch_shopify_products()
 
         if df.empty:
-            st.session_state.messages.append({"role": "assistant", "content": "Oops! I couldn’t fetch the Shopify data. Please check your API credentials."})
+            st.session_state.messages_shopify.append({"role": "assistant", "content": "Oops! I couldn’t fetch the Shopify data. Please check your API credentials."})
             with st.chat_message("assistant"):
                 st.write("Oops! I couldn’t fetch the Shopify data. Please check your API credentials.")
         else:
@@ -345,7 +367,7 @@ if prompt := st.chat_input("Ask me anything about your data or Shopify catalog!"
                         }
                     ]
                     response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                    st.session_state.messages.append({"role": "assistant", "content": response.choices[0].message.content})
+                    st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                     with st.chat_message("assistant"):
                         st.write(response.choices[0].message.content)
 
@@ -384,7 +406,7 @@ if prompt := st.chat_input("Ask me anything about your data or Shopify catalog!"
                         }
                     ]
                     response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                    st.session_state.messages.append({"role": "assistant", "content": response.choices[0].message.content})
+                    st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                     with st.chat_message("assistant"):
                         st.write(response.choices[0].message.content)
 
@@ -443,7 +465,7 @@ if prompt := st.chat_input("Ask me anything about your data or Shopify catalog!"
                     }
                 ]
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                st.session_state.messages.append({"role": "assistant", "content": response.choices[0].message.content})
+                st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                 with st.chat_message("assistant"):
                     st.write(response.choices[0].message.content)
 
@@ -477,10 +499,6 @@ if prompt := st.chat_input("Ask me anything about your data or Shopify catalog!"
                     }
                 ]
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                st.session_state.messages.append({"role": "assistant", "content": response.choices[0].message.content})
+                st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                 with st.chat_message("assistant"):
                     st.write(response.choices[0].message.content)
-    else:
-        st.session_state.messages.append({"role": "assistant", "content": "Hmm, I’m not sure where to look! Please ask about your data (e.g., reviews or sales) or Shopify catalog (e.g., stock levels)."})
-        with st.chat_message("assistant"):
-            st.write("Hmm, I’m not sure where to look! Please ask about your data (e.g., reviews or sales) or Shopify catalog (e.g., stock levels).")
