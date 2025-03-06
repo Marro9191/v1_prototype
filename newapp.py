@@ -636,9 +636,14 @@ elif menu == "Shopify Catalog Analysis":
     if prompt := st.chat_input("Ask me about your Shopify catalog! (e.g., 'Which products are out of stock, and how many?')"):
         # Avoid reprocessing the default query if it matches
         if prompt == "Which products are out of stock, and how many?" and len(st.session_state.messages_shopify) > 1:
-            continue  # Skip processing since default query was already handled
-        st.session_state.messages_shopify.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.write(prompt)
-
-        process_shopify_query(prompt, st.session_state.messages_shopify)
+            st.session_state.messages_shopify.append({"role": "user", "content": prompt})
+            with st.chat_message("user"):
+                st.write(prompt)
+            st.session_state.messages_shopify.append({"role": "assistant", "content": "I’ve already answered this query! Please check the chat history above or ask a different question."})
+            with st.chat_message("assistant"):
+                st.write("I’ve already answered this query! Please check the chat history above or ask a different question.")
+        else:
+            st.session_state.messages_shopify.append({"role": "user", "content": prompt})
+            with st.chat_message("user"):
+                st.write(prompt)
+            process_shopify_query(prompt, st.session_state.messages_shopify)
