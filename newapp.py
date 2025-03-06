@@ -177,12 +177,58 @@ if menu == "Insight Conversation":
         df_filtered = df if category_filter is None else df[df['category'] == category_filter]
 
         # Single OpenAI response with forced use of grouped data
-        if "total number of reviews per month" in question.lower():
+        # New condition for specific month comparisons (e.g., "January compared to February")
+        if "compared to" in question.lower() and "reviews" in question.lower():
+            # Extract the two months from the query
+            months = re.findall(r'\b(January|February|March|April|May|June|July|August|September|October|November|December)\b', question, re.IGNORECASE)
+            if len(months) >= 2:
+                month1, month2 = months[0], months[1]
+                # Filter data for the two months
+                month1_data = df_filtered[df_filtered['month_year'].str.contains(month1, case=False, na=False)]
+                month2_data = df_filtered[df_filtered['month_year'].str.contains(month2, case=False, na=False)]
+
+                # Sum reviews for each month
+                month1_reviews = month1_data['reviews'].sum() if 'reviews' in month1_data.columns else 0
+                month2_reviews = month2_data['reviews'].sum() if 'reviews' in month2_data.columns else 0
+
+                # OpenAI response
+                messages = [
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Provide a concise comparison of the total number of reviews for the {category_filter or 'all'} category "
+                            f"between {month1} 2025 and {month2} 2025. The data shows {month1} 2025 had {month1_reviews} reviews, "
+                            f"and {month2} 2025 had {month2_reviews} reviews. "
+                            f"Example: 'The total number of reviews for the toothbrush category in {month1} 2025 was {month1_reviews}, compared to {month2_reviews} in {month2} 2025.'"
+                        )
+                    }
+                ]
+                stream = client.chat.completions.create(model="gpt-4o", messages=messages, stream=True)
+                st.subheader("Response")
+                st.write_stream(stream)
+
+                # Analysis Results
+                st.subheader("Analysis Results")
+                st.write(f"{month1} 2025: {month1_reviews} reviews")
+                st.write(f"{month2} 2025: {month2_reviews} reviews")
+
+                # Generate bar chart
+                fig = go.Figure(data=[
+                    go.Bar(x=[month1 + " 2025", month2 + " 2025"], y=[month1_reviews, month2_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
+                ])
+                fig.update_layout(
+                    title=f"Reviews Comparison - {category_filter.capitalize() if category_filter else 'All Categories'} ({month1} vs {month2})",
+                    xaxis_title="Month",
+                    yaxis_title="Number of Reviews",
+                    height=500,
+                    width=700
+                )
+                st.plotly_chart(fig)
+
+        # Existing condition for total number of reviews per month
+        elif "total number of reviews per month" in question.lower():
             # Group by month_year and category, sum all reviews
             monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
-            # Removed debug output from UI
-            # st.write("Grouped Data for Reviews (monthly_reviews):")
-            # st.write(monthly_reviews)
             openai_data = monthly_reviews.to_string()
             messages = [
                 {
@@ -194,33 +240,53 @@ if menu == "Insight Conversation":
                     )
                 }
             ]
-        else:
-            # Handle "most" or "least" queries
-            metric = None
-            for col in df.columns:
-                if any(keyword in col.lower() for keyword in ["sales", "sale"]):
-                    metric = col
-                    break
-            if not metric:
-                metric = "reviews"  # Default to reviews if no sales column found
-                st.warning(f"Metric '{metric}' used as default since 'sales' not found in the dataset.")
-            grouped_data = df_filtered.groupby(['month_year', 'SKU'])[metric].sum().reset_index()
-            openai_data = grouped_data.to_string()
-            messages = [
-                {
-                    "role": "user",
-                    "content": (
-                        f"Here's the grouped data with columns: {list(grouped_data.columns)}. "
-                        f"Data:\n{openai_data}\n\n---\n\n {question} Provide a concise response (e.g., 'The SKU with most {metric} is SKU 1 with 100.'). Use only this data."
-                    )
-                }
-            ]
-        stream = client.chat.completions.create(model="gpt-4o", messages=messages, stream=True)
-        st.subheader("Response")
-        st.write_stream(stream)
+            stream = client.chat.completions.create(model="gpt-4o", messages=messages, stream=True)
+            st.subheader("Response")
+            st.write_stream(stream)
+
+            # Analysis Results
+            monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
+            seen = set()
+            unique_results = []
+            for index, row in monthly_reviews.iterrows():
+                key = (row['month_year'], row['category'])
+                if key not in seen:
+                    unique_results.append(row)
+                    seen.add(key)
+            monthly_reviews = pd.DataFrame(unique_results)
+
+            st.subheader("Analysis Results")
+            st.table(monthly_reviews.style.format({'reviews': '{:,.0f}'}))
+
+            # Generate bar chart
+            colors = {'toothbrush': '#FF6B6B', 'hygiene': '#4ECDC4'}
+            data_traces = []
+            unique_months = sorted(monthly_reviews['month_year'].unique())
+
+            for cat in monthly_reviews['category'].unique():
+                cat_data = monthly_reviews[monthly_reviews['category'] == cat]
+                data_traces.append(go.Bar(
+                    x=unique_months,
+                    y=[cat_data[cat_data['month_year'] == month]['reviews'].sum() if month in cat_data['month_year'].values else 0 for month in unique_months],
+                    name=cat.capitalize(),
+                    marker_color=colors.get(cat, '#45B7D1')
+                ))
+
+            chart_title = f"Total Reviews Per Month by {'Toothbrush' if category_filter == 'toothbrush' else 'Category'}"
+            fig = go.Figure(data=data_traces)
+            fig.update_layout(
+                title=chart_title,
+                xaxis_title="Month",
+                yaxis_title="Number of Reviews",
+                height=500,
+                width=700,
+                barmode='group',
+                showlegend=True
+            )
+            st.plotly_chart(fig)
 
         # Custom analysis for review comparison (last month vs this month)
-        if "reviews" in question.lower() and "last month" in question.lower() and "this month" in question.lower():
+        elif "reviews" in question.lower() and "last month" in question.lower() and "this month" in question.lower():
             current_date = datetime.now()
             current_month = current_date.month
             current_year = current_date.year
@@ -242,6 +308,21 @@ if menu == "Insight Conversation":
             this_month_reviews = this_month_data['reviews'].sum() if 'reviews' in this_month_data.columns else 0
             last_month_reviews = last_month_data['reviews'].sum() if 'reviews' in last_month_data.columns else 0
 
+            messages = [
+                {
+                    "role": "user",
+                    "content": (
+                        f"Provide a concise comparison of the total number of reviews for the {category_filter or 'all'} category "
+                        f"between last month and this month. The data shows last month had {last_month_reviews} reviews, "
+                        f"and this month had {this_month_reviews} reviews. "
+                        f"Example: 'The total number of reviews for the toothbrush category last month was {last_month_reviews}, compared to {this_month_reviews} this month.'"
+                    )
+                }
+            ]
+            stream = client.chat.completions.create(model="gpt-4o", messages=messages, stream=True)
+            st.subheader("Response")
+            st.write_stream(stream)
+
             st.subheader("Analysis Results")
             st.write(f"This Month: {this_month_reviews} reviews")
             st.write(f"Last Month: {last_month_reviews} reviews")
@@ -258,58 +339,8 @@ if menu == "Insight Conversation":
             )
             st.plotly_chart(fig)
 
-        # Custom analysis for total number of reviews per month
-        elif "total number of reviews per month" in question.lower():
-            # Apply category filter
-            df_filtered = df if category_filter is None else df[df['category'] == category_filter]
-
-            # Group by month_year and category, sum all reviews
-            monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
-
-            # Remove duplicates in Analysis Results by using a set of unique combinations
-            seen = set()
-            unique_results = []
-            for index, row in monthly_reviews.iterrows():
-                key = (row['month_year'], row['category'])
-                if key not in seen:
-                    unique_results.append(row)
-                    seen.add(key)
-            monthly_reviews = pd.DataFrame(unique_results)
-
-            st.subheader("Analysis Results")
-            # Display as a table for better readability
-            st.table(monthly_reviews.style.format({'reviews': '{:,.0f}'}))
-
-            # Generate automatic bar chart with different colors for each category
-            colors = {'toothbrush': '#FF6B6B', 'hygiene': '#4ECDC4'}  # Define colors for categories
-            data_traces = []
-            unique_months = sorted(monthly_reviews['month_year'].unique())  # Sort months chronologically
-
-            for cat in monthly_reviews['category'].unique():
-                cat_data = monthly_reviews[monthly_reviews['category'] == cat]
-                data_traces.append(go.Bar(
-                    x=unique_months,
-                    y=[cat_data[cat_data['month_year'] == month]['reviews'].sum() if month in cat_data['month_year'].values else 0 for month in unique_months],
-                    name=cat.capitalize(),
-                    marker_color=colors.get(cat, '#45B7D1')  # Default color if category not in colors dict
-                ))
-
-            chart_title = f"Total Reviews Per Month by {'Toothbrush' if category_filter == 'toothbrush' else 'Category'}"
-            fig = go.Figure(data=data_traces)
-            fig.update_layout(
-                title=chart_title,
-                xaxis_title="Month",
-                yaxis_title="Number of Reviews",
-                height=500,
-                width=700,
-                barmode='group',  # Group bars by category
-                showlegend=True
-            )
-            st.plotly_chart(fig)
-
         # Custom analysis for most and least values dynamically
         elif any(word in question.lower() for word in ["most", "least"]):
-            # Dynamically infer entity and metric
             entity = "SKU" if "sku" in question.lower() else "product"
             metric = None
             for col in df.columns:
@@ -317,35 +348,27 @@ if menu == "Insight Conversation":
                     metric = col
                     break
             if not metric:
-                metric = "reviews"  # Default to reviews if no sales column found
+                metric = "reviews"
                 st.warning(f"Metric '{metric}' used as default since 'sales' not found in the dataset.")
-            group_column = entity.lower() if entity.lower() in df.columns else "SKU"  # Default to SKU if entity not found
+            group_column = entity.lower() if entity.lower() in df.columns else "SKU"
             if group_column not in df.columns:
                 st.warning(f"Grouping column '{group_column}' not found in the dataset.")
                 st.stop()
 
-            # Extract month and year for per-month analysis
             df['month_year'] = df['date'].dt.strftime('%B %Y')
-
-            # Group by month_year and the entity, sum the metric
             entity_metrics = df.groupby(['month_year', group_column])[metric].sum().reset_index()
 
-            # Check if data is valid
             if entity_metrics.empty or entity_metrics[metric].isna().all():
                 st.warning(f"No valid {metric} data available for {entity}s.")
                 st.stop()
 
-            # Analyze per month
             st.subheader("Analysis Results")
             for month_year in entity_metrics['month_year'].unique():
                 month_data = entity_metrics[entity_metrics['month_year'] == month_year]
-
-                # Find entity with most metric for this month
                 max_value = month_data[metric].max()
                 most_entities = month_data[month_data[metric] == max_value][group_column].tolist()
                 most_entities_str = ", ".join(most_entities) if len(most_entities) > 1 else most_entities[0]
 
-                # Find entity with least metric for this month (excluding 0)
                 min_value = month_data[month_data[metric] > 0][metric].min() if (month_data[metric] > 0).any() else 0
                 least_entities = month_data[month_data[metric] == min_value][group_column].tolist() if min_value > 0 else [None]
                 least_entities_str = ", ".join(filter(None, least_entities)) if len(least_entities) > 1 else (least_entities[0] if least_entities[0] else "None")
