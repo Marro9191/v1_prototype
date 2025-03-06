@@ -110,6 +110,7 @@ if menu == "Insight Conversation":
             st.warning("No valid dates found in the 'date' column. Please ensure dates are in DD/MM/YYYY format.")
             st.stop()
 
+        # Single OpenAI response
         messages = [{"role": "user", "content": f"Here's a document: {document} \n\n---\n\n {question}"}]
         stream = client.chat.completions.create(model="gpt-3.5-turbo", messages=messages, stream=True)
         st.subheader("Response")
@@ -196,23 +197,6 @@ if menu == "Insight Conversation":
             elif not least_skus:
                 st.warning("No valid least reviews found.")
                 least_skus = []
-
-            # Prepare data for OpenAI
-            openai_data = sku_reviews.to_string()
-            messages = [
-                {
-                    "role": "user",
-                    "content": (
-                        f"Here's a dataset with columns: {list(df.columns)}. "
-                        f"Grouped data by SKU and summed reviews:\n{openai_data}\n\n"
-                        f"---\n\nBased on the data, identify the SKU(s) with the most reviews and the SKU(s) with the least reviews (excluding 0). "
-                        f"Provide the SKU(s) and their review counts. The query is: {question}"
-                    )
-                }
-            ]
-            stream = client.chat.completions.create(model="gpt-3.5-turbo", messages=messages, stream=True)
-            st.subheader("Response")
-            st.write_stream(stream)
 
             st.subheader("Analysis Results")
             if most_skus:
