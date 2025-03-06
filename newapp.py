@@ -148,20 +148,26 @@ def process_shopify_query(prompt, messages_list):
 
             if out_of_stock_count > 0:
                 out_of_stock_list = out_of_stock[['title', 'sku']].drop_duplicates().to_dict('records')
+                # Select a few examples for the friendly response
+                sample_products = out_of_stock_list[:3]  # Limit to 3 examples for brevity
+                sample_text = ", ".join([f"{item['title']} (SKU: {item['sku']})" for item in sample_products])
+                if len(out_of_stock_list) > 3:
+                    sample_text += ", and more!"
+
                 messages = [
                     {
                         "role": "user",
                         "content": (
-                            f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a friendly and concise response. "
-                            f"List the out-of-stock products with their titles and quantities (0), and say something like 'Hey there! We’ve checked your stock, "
-                            f"and here are the products currently out of stock: [list]. Time to restock!' Avoid technical details unless asked."
+                            f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a super friendly and concise response. "
+                            f"There are {out_of_stock_count} products out of stock. Mention the total count and give a few examples (e.g., {sample_text}), "
+                            f"and encourage restocking with a fun tone like 'Time to restock those shelves! Let me know if you need help!'"
                         )
                     }
                 ]
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
                 messages_list.append({"role": "assistant", "content": response.choices[0].message.content})
 
-                messages_list.append({"role": "assistant", "content": f"### Analysis Results\nTotal number of out-of-stock products: {out_of_stock_count}\n" + "\n".join([f"- Product: {item['title']} (SKU: {item['sku']}) - 0 items in stock" for item in out_of_stock_list]) + f"\n\nIt looks like there are {out_of_stock_count} variants that are out of stock. Time to restock!"})
+                messages_list.append({"role": "assistant", "content": f"### Analysis Results\nTotal number of out-of-stock products: {out_of_stock_count}\n" + "\n".join([f"- Product: {item['title']} (SKU: {item['sku']}) - 0 items in stock" for item in out_of_stock_list[:5]]) + f"\n\nLooks like we have {out_of_stock_count} variants out of stock. Time to restock!"})
 
                 fig = go.Figure(data=[
                     go.Pie(
@@ -185,8 +191,8 @@ def process_shopify_query(prompt, messages_list):
                     {
                         "role": "user",
                         "content": (
-                            f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a friendly and concise response. "
-                            f"Say something like 'Hey there! We’ve checked your stock, and great news—there are no products out of stock right now!'"
+                            f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a super friendly and concise response. "
+                            f"Say something like 'Awesome news! All {len(df)} products are fully stocked—great job!'"
                         )
                     }
                 ]
