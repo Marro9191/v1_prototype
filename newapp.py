@@ -167,8 +167,18 @@ if menu == "Insight Conversation":
             category = "toothbrush" if "toothbrush" in question.lower() else None
             df_filtered = df[df['category'].str.lower().str.contains("toot?brush", na=False)] if category else df
 
-            # Group by month_year and category, sum reviews (do not deduplicate SKUs)
+            # Group by month_year and category, sum all reviews
             monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
+
+            # Remove duplicates in Analysis Results by using a set of unique combinations
+            seen = set()
+            unique_results = []
+            for index, row in monthly_reviews.iterrows():
+                key = (row['month_year'], row['category'])
+                if key not in seen:
+                    unique_results.append(row)
+                    seen.add(key)
+            monthly_reviews = pd.DataFrame(unique_results)
 
             st.subheader("Analysis Results")
             for index, row in monthly_reviews.iterrows():
