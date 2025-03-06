@@ -144,25 +144,10 @@ if menu == "Insight Conversation":
             with st.chat_message(message["role"]):
                 st.write(message["content"])
 
-    # Sticky container for uploader and chat input
-    sticky_container = st.container()
-    with sticky_container:
-        st.markdown(
-            """
-            <style>
-            .sticky-container {
-                position: sticky;
-                bottom: 0;
-                background-color: white;
-                padding: 10px;
-                z-index: 100;
-                border-top: 1px solid #ccc;
-            }
-            </style>
-            """,
-            unsafe_allow_html=True
-        )
+    # Container for uploader and chat input at the bottom
+    input_container = st.container()
 
+    with input_container:
         # File uploader placed just above the chat input
         uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
         if uploaded_file and uploaded_file.name != st.session_state.last_uploaded_file:
