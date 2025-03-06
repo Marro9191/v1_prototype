@@ -120,21 +120,35 @@ default_csv_data = """﻿date,image,SKU,promo,category,product,performance,retur
 st.sidebar.title("Navigation")
 menu = st.sidebar.radio("Menu", ["Insight Conversation", "Shopify Catalog Analysis"])
 
-# Initialize chat history for each tab
+# Initialize chat history and data for each tab
 if "messages_insight" not in st.session_state:
     st.session_state.messages_insight = []
 if "messages_shopify" not in st.session_state:
     st.session_state.messages_shopify = []
+if "df_insight" not in st.session_state:
+    st.session_state.df_insight = pd.read_csv(io.StringIO(default_csv_data))
 
 # Display chat interface based on selected tab
 if menu == "Insight Conversation":
     st.title("📄 Comcore Prototype v1")
-    st.write("Chat with me about your data! Ask about reviews, sales, or specific months. Default data is pre-loaded.")
+    st.write("Chat with me about your data! Upload a CSV or ask about reviews, sales, or specific months. Default data is pre-loaded.")
 
     # Display chat messages for Insight Conversation
     for message in st.session_state.messages_insight:
         with st.chat_message(message["role"]):
             st.write(message["content"])
+
+    # File uploader within chat interface
+    uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
+    if uploaded_file is not None:
+        df = pd.read_csv(uploaded_file)
+        st.session_state.df_insight = df
+        st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
+        with st.chat_message("user"):
+            st.write(f"Uploaded CSV file: {uploaded_file.name}")
+        st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
+        with st.chat_message("assistant"):
+            st.write("Great! I’ve loaded your CSV file. Feel free to ask questions about it!")
 
     # Chat input for Insight Conversation
     if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
@@ -143,17 +157,12 @@ if menu == "Insight Conversation":
             st.write(prompt)
 
         # Load and process data
-        if "df" not in st.session_state:
-            df = pd.read_csv(io.StringIO(default_csv_data))
-            st.session_state.df = df
-        else:
-            df = st.session_state.df
-
+        df = st.session_state.df_insight
         df['date'] = pd.to_datetime(df['date'], format='%d/%m/%Y', errors='coerce')
         if df['date'].isna().all():
             st.warning("No valid dates found in the 'date' column. Please ensure dates are in DD/MM/YYYY format.")
             st.stop()
-        st.write(f"Loaded {len(df)} rows from CSV.")  # Debug row count
+        st.write(f"Loaded {len(df)} rows from {'uploaded CSV' if 'uploaded_file' in locals() else 'default data'}.")  # Debug row count
         df['month_year'] = df['date'].dt.strftime('%B %Y')
         df['category'] = df['category'].str.lower().replace("tootbrush", "toothbrush")
 
@@ -317,7 +326,7 @@ if menu == "Insight Conversation":
             messages = [
                 {
                     "role": "user",
-                    "content": f"Provide a friendly response. I don’t fully understand your question about the data. Could you please ask about reviews, sales, or specific months? For example, 'What were the total number of reviews per month?' or 'Which SKU had the most sales?'"
+                    "content": f"Provide a friendly response. I don’t fully understand your question about the data. Could you please ask about reviews, sales, or specific months? For example, 'What were the total number of reviews per month?' or 'Which SKU had the most sales?' Or upload a CSV file to start!"
                 }
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
