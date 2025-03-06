@@ -118,15 +118,27 @@ if menu == "Insight Conversation":
         # Normalize category names
         df['category'] = df['category'].str.lower().replace("tootbrush", "toothbrush")
 
+        # Determine category filter based on query
+        category_filter = None
+        if "toothbrush" in question.lower():
+            category_filter = "toothbrush"
+        elif "all categories" in question.lower() or "all" in question.lower():
+            category_filter = None  # Default to all categories
+        else:
+            category_filter = None  # Default to all categories if not specified
+
+        # Apply category filter
+        df_filtered = df if category_filter is None else df[df['category'] == category_filter]
+
         # Single OpenAI response with forced use of grouped data
-        monthly_reviews = df.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
+        monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
         openai_data = monthly_reviews.to_string()
         messages = [
             {
                 "role": "user",
                 "content": (
                     f"Here's the grouped data with columns: {list(monthly_reviews.columns)}. "
-                    f"Data:\n{openai_data}\n\n---\n\n {question} Provide a concise response listing the totals per month and category (e.g., 'January 2025: Toothbrush 3000, Hygiene 746.'). Use only this data."
+                    f"Data:\n{openai_data}\n\n---\n\n {question} Provide a concise response listing the totals per month and category (e.g., 'January 2025: Toothbrush 3000.'). Use only this data."
                 )
             }
         ]
@@ -175,8 +187,8 @@ if menu == "Insight Conversation":
 
         # Custom analysis for total number of reviews per month
         elif "total number of reviews per month" in question.lower():
-            category = "toothbrush" if "toothbrush" in question.lower() else None
-            df_filtered = df[df['category'].str.lower().str.contains("toot?brush", na=False)] if category else df
+            # Apply category filter
+            df_filtered = df if category_filter is None else df[df['category'] == category_filter]
 
             # Group by month_year and category, sum all reviews
             monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
@@ -209,7 +221,7 @@ if menu == "Insight Conversation":
                     marker_color=colors.get(cat, '#45B7D1')  # Default color if category not in colors dict
                 ))
 
-            chart_title = "Total Reviews Per Month by Category"
+            chart_title = f"Total Reviews Per Month by {'Toothbrush' if category_filter == 'toothbrush' else 'Category'}"
             fig = go.Figure(data=data_traces)
             fig.update_layout(
                 title=chart_title,
