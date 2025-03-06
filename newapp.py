@@ -144,17 +144,31 @@ if menu == "Insight Conversation":
             with st.chat_message(message["role"]):
                 st.write(message["content"])
 
-        # Placeholder for Analysis Results (dynamically populated by query logic)
-        if any("### Analysis Results" in msg["content"] for msg in st.session_state.messages_insight[-3:]):  # Check last 3 messages
-            with st.chat_message("assistant"):
-                st.write("### Analysis Results")
-                # This will be populated by the query logic below
+    # Custom chat input area with file uploader and text input
+    with st.container():
+        # Use columns to place text input and file uploader side by side
+        col1, col2 = st.columns([3, 1])  # Adjust column widths (3:1 ratio for text input:file uploader)
 
-    # Use columns to place uploader and chat input side by side, just above the input field
-    col1, col2 = st.columns([1, 2])  # Adjust column widths (1:2 ratio for uploader:chat input)
+        with col1:
+            # Use st.text_input instead of st.chat_input to allow embedding the uploader
+            prompt = st.text_input(
+                "Ask me about your data! (e.g., 'What were the total number of reviews per month?')",
+                key="custom_chat_input",
+                placeholder="Ask me about your data! (e.g., 'What were the total number of reviews per month?')",
+                label_visibility="collapsed"
+            )
 
-    with col1:
-        uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
+        with col2:
+            # Place the file uploader in the same row as the text input
+            uploaded_file = st.file_uploader(
+                "Upload a CSV file",
+                type=["csv"],
+                key="insight_uploader",
+                help="Upload your data file to analyze.",
+                label_visibility="collapsed"
+            )
+
+        # Process file upload
         if uploaded_file and uploaded_file.name != st.session_state.last_uploaded_file:
             df = pd.read_csv(uploaded_file)
             st.session_state.df_insight = df
@@ -169,8 +183,8 @@ if menu == "Insight Conversation":
             st.session_state.last_uploaded_file = uploaded_file.name
             st.rerun()
 
-    with col2:
-        if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
+        # Process text input (simulate chat input behavior)
+        if prompt:
             st.session_state.messages_insight.append({"role": "user", "content": prompt})
             with st.chat_message("user"):
                 st.write(prompt)
