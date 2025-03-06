@@ -135,40 +135,36 @@ if menu == "Insight Conversation":
     st.title("📄 Comcore Prototype v1")
     st.write("Chat with me about your data! Upload a CSV or ask about reviews, sales, or specific months. Default data is pre-loaded.")
 
-    # Container for chat messages and results (scrollable content)
-    main_container = st.container()
+    # Container for chat messages (scrollable content)
+    chat_container = st.container()
 
-    with main_container:
+    with chat_container:
         # Display chat messages for Insight Conversation
         for message in st.session_state.messages_insight:
             with st.chat_message(message["role"]):
                 st.write(message["content"])
 
-    # Custom chat input area with file uploader and text input
-    with st.container():
-        # Use columns to place text input and file uploader side by side
-        col1, col2 = st.columns([3, 1])  # Adjust column widths (3:1 ratio for text input:file uploader)
+    # Sticky container for uploader and chat input
+    sticky_container = st.container()
+    with sticky_container:
+        st.markdown(
+            """
+            <style>
+            .sticky-container {
+                position: sticky;
+                bottom: 0;
+                background-color: white;
+                padding: 10px;
+                z-index: 100;
+                border-top: 1px solid #ccc;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
 
-        with col1:
-            # Use st.text_input instead of st.chat_input to allow embedding the uploader
-            prompt = st.text_input(
-                "Ask me about your data! (e.g., 'What were the total number of reviews per month?')",
-                key="custom_chat_input",
-                placeholder="Ask me about your data! (e.g., 'What were the total number of reviews per month?')",
-                label_visibility="collapsed"
-            )
-
-        with col2:
-            # Place the file uploader in the same row as the text input
-            uploaded_file = st.file_uploader(
-                "Upload a CSV file",
-                type=["csv"],
-                key="insight_uploader",
-                help="Upload your data file to analyze.",
-                label_visibility="collapsed"
-            )
-
-        # Process file upload
+        # File uploader placed just above the chat input
+        uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
         if uploaded_file and uploaded_file.name != st.session_state.last_uploaded_file:
             df = pd.read_csv(uploaded_file)
             st.session_state.df_insight = df
@@ -183,8 +179,8 @@ if menu == "Insight Conversation":
             st.session_state.last_uploaded_file = uploaded_file.name
             st.rerun()
 
-        # Process text input (simulate chat input behavior)
-        if prompt:
+        # Chat input for Insight Conversation, directly below the file uploader
+        if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
             st.session_state.messages_insight.append({"role": "user", "content": prompt})
             with st.chat_message("user"):
                 st.write(prompt)
