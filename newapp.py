@@ -187,17 +187,27 @@ if menu == "Insight Conversation":
             for index, row in monthly_reviews.iterrows():
                 st.write(f"{row['month_year']}: {row['reviews']} reviews")
 
-            # Generate automatic bar chart with proper category naming
+            # Generate automatic bar chart with three different colors and legend
+            colors = ['#FF6B6B', '#4ECDC4', '#45B7D1']  # Three distinct colors
+            data_traces = []
+            for i, (index, row) in enumerate(monthly_reviews.iterrows()):
+                data_traces.append(go.Bar(
+                    x=[row['month_year']],
+                    y=[row['reviews']],
+                    name=row['month_year'],
+                    marker_color=colors[i % len(colors)]
+                ))
+
             chart_title = f"Total Reviews Per Month - {category if category else 'All Categories'} Category"
-            fig = go.Figure(data=[
-                go.Bar(x=monthly_reviews['month_year'], y=monthly_reviews['reviews'], marker_color='#FF6B6B')
-            ])
+            fig = go.Figure(data=data_traces)
             fig.update_layout(
                 title=chart_title,
                 xaxis_title="Month",
                 yaxis_title="Number of Reviews",
                 height=500,
-                width=700
+                width=700,
+                barmode='group',  # Ensure bars are grouped if more data is added
+                showlegend=True
             )
             st.plotly_chart(fig)
 
@@ -279,7 +289,7 @@ if menu == "Insight Conversation":
             else:
                 st.warning("No numeric columns available for charting.")
         else:
-            st.warning("The uploaded data is empty.")
+            st.warning("The uploaded data is empty")
 
 # Shopify Catalog Analysis
 elif menu == "Shopify Catalog Analysis":
@@ -384,4 +394,4 @@ elif menu == "Shopify Catalog Analysis":
                 else:
                     st.warning("No numeric columns available for charting.")
             else:
-                st.warning("The fetched Shopify data is empty.")
+                st.warning("The fetched Shopify data is empty")
