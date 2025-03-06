@@ -135,34 +135,25 @@ if menu == "Insight Conversation":
     st.title("📄 Comcore Prototype v1")
     st.write("Chat with me about your data! Upload a CSV or ask about reviews, sales, or specific months. Default data is pre-loaded.")
 
-    # Container for chat messages (scrollable content)
-    chat_container = st.container()
+    # Container for chat messages and results (scrollable content)
+    main_container = st.container()
 
-    with chat_container:
+    with main_container:
         # Display chat messages for Insight Conversation
         for message in st.session_state.messages_insight:
             with st.chat_message(message["role"]):
                 st.write(message["content"])
 
-    # Sticky container for uploader and chat input
-    sticky_container = st.container()
-    with sticky_container:
-        st.markdown(
-            """
-            <style>
-            .sticky-container {
-                position: sticky;
-                bottom: 0;
-                background-color: white;
-                padding: 10px;
-                z-index: 100;
-                border-top: 1px solid #ccc;
-            }
-            </style>
-            """,
-            unsafe_allow_html=True
-        )
+        # Placeholder for Analysis Results (will be populated based on prompt)
+        if any("### Analysis Results" in msg["content"] for msg in st.session_state.messages_insight[-3:]):  # Check last 3 messages
+            with st.chat_message("assistant"):
+                st.write("### Analysis Results")
+                # This will be dynamically populated by the query logic below
 
+    # Container for uploader and chat input (below results or at bottom)
+    input_container = st.container()
+
+    with input_container:
         # Use columns to place uploader and chat input side by side
         col1, col2 = st.columns([1, 2])  # Adjust column widths (1:2 ratio for uploader:chat input)
 
