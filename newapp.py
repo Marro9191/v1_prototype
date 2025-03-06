@@ -129,15 +129,16 @@ if "df_insight" not in st.session_state:
     st.session_state.df_insight = pd.read_csv(io.StringIO(default_csv_data))
 if "last_uploaded_file" not in st.session_state:
     st.session_state.last_uploaded_file = None
-if "has_uploaded_message" not in st.session_state:
-    st.session_state.has_uploaded_message = False
+if "uploaded_files" not in st.session_state:
+    st.session_state.uploaded_files = set()  # Track unique file names
 
 # Custom CSS to enforce layout
 st.markdown(
     """
     <style>
     .main-container {
-        padding-bottom: 120px; /* Space for the sticky input container */
+        padding-bottom: 120px; /* Space for the fixed input container */
+        z-index: 1;
     }
     .input-container {
         position: fixed;
@@ -146,13 +147,14 @@ st.markdown(
         right: 0;
         background-color: white;
         padding: 10px;
-        z-index: 100;
+        z-index: 1000;
         border-top: 1px solid #ccc;
-        margin-top: 0;
-        margin-bottom: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0px; /* No gap between uploader and chat input */
     }
     .stFileUploader {
-        margin-bottom: 0px !important; /* Remove space between uploader and chat input */
+        margin-bottom: 0px !important; /* Remove space below uploader */
         padding-bottom: 0px !important;
     }
     .stChatInput {
@@ -170,9 +172,7 @@ if menu == "Insight Conversation":
     st.write("Chat with me about your data! Upload a CSV or ask about reviews, sales, or specific months. Default data is pre-loaded.")
 
     # Main container for chat messages and responses (above input)
-    main_container = st.container()
-
-    with main_container:
+    with st.container():
         st.markdown('<div class="main-container">', unsafe_allow_html=True)
         # Display existing chat messages
         for message in st.session_state.messages_insight:
@@ -181,23 +181,20 @@ if menu == "Insight Conversation":
         st.markdown('</div>', unsafe_allow_html=True)
 
     # Input container at the bottom with CSS styling
-    input_container = st.container()
-
-    with input_container:
+    with st.container():
         st.markdown('<div class="input-container">', unsafe_allow_html=True)
         # File uploader placed just above the chat input
         uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
-        if uploaded_file and uploaded_file.name != st.session_state.last_uploaded_file:
-            df = pd.read_csv(uploaded_file)
-            st.session_state.df_insight = df
-            st.session_state.last_uploaded_file = uploaded_file.name
-            # Only add the upload message if it hasn't been added yet
-            if not st.session_state.has_uploaded_message:
-                st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
+        if uploaded_file:
+            file_name = uploaded_file.name
+            if file_name not in st.session_state.uploaded_files:
+                df = pd.read_csv(uploaded_file)
+                st.session_state.df_insight = df
+                st.session_state.last_uploaded_file = file_name
+                st.session_state.uploaded_files.add(file_name)
+                st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {file_name}"})
                 st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
-                st.session_state.has_uploaded_message = True
-                # Refresh to display messages without triggering duplicate uploads
-                st.rerun()
+                st.rerun()  # Refresh to display new messages
 
         # Chat input for Insight Conversation, directly below the file uploader
         if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
@@ -459,8 +456,7 @@ elif menu == "Shopify Catalog Analysis":
 
                 if out_of_stock_count > 0:
                     out_of_stock_list = out_of_stock[['title', 'sku']].drop_duplicates().to_dict('records')
-                    # Select a few examples for the response
-                    sample_products = out_of_stock_list[:3]  # Limit to 3 examples for conciseness
+                    sample_products = out_of_stock_list[:3]
                     sample_text = "\n".join([f"{i+1}. {item['title']} (SKU: {item['sku']}) - 0 items in stock" for i, item in enumerate(sample_products)])
                     if len(out_of_stock_list) > 3:
                         sample_text += "\n(and more!)"
