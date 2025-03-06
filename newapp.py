@@ -134,15 +134,32 @@ if menu == "Insight Conversation":
 
     if uploaded_file and question:
         df = pd.read_csv(uploaded_file)
-        document = df.to_string()
 
-        # Parse dates with flexible formats (DD/MM/YY or DD/MM/YYYY)
-        df['date'] = pd.to_datetime(df['date'], format='%d/%m/%y', errors='coerce', dayfirst=True)
+        # Strip whitespace from the 'date' column
+        df['date'] = df['date'].str.strip()
+
+        # Debug: Show raw date values before parsing
+        st.write("Raw date column values:", df['date'].head(10))
+
+        # Attempt to parse dates with a general approach first
+        df['date'] = pd.to_datetime(df['date'], errors='coerce', dayfirst=True)
+
+        # If general parsing fails, try specific formats
         if df['date'].isna().all():
-            df['date'] = pd.to_datetime(df['date'], format='%d/%m/%Y', errors='coerce', dayfirst=True)
+            df['date'] = pd.to_datetime(df['date'], format='%d/%m/%Y', errors='coerce')
         if df['date'].isna().all():
-            st.warning("No valid dates found in the 'date' column. Please use DD/MM/YY or DD/MM/YYYY format.")
+            df['date'] = pd.to_datetime(df['date'], format='%d/%m/%y', errors='coerce')
+
+        # Final check: if still all NaT, stop and show error
+        if df['date'].isna().all():
+            st.warning("No valid dates found in the 'date' column. Please ensure dates are in DD/MM/YY or DD/MM/YYYY format.")
+            st.write("Sample of unparseable dates:", df['date'].head())
             st.stop()
+
+        # Debug: Show parsed dates
+        st.write("Parsed date column values:", df['date'].head(10))
+
+        document = df.to_string()
 
         # Debug: Show a representative sample (include both January and February for tootbrush)
         sample_data = df[df['category'].str.lower() == 'tootbrush'].head(10)
