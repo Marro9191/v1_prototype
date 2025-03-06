@@ -96,7 +96,7 @@ if menu == "Insight Conversation":
     uploaded_file = st.file_uploader("Upload a document (.csv)", type="csv")
     question = st.text_area(
         "Now ask a question about the document!",
-        placeholder="Example: What were total number of reviews last month compared to this month for toothbrush category? Or Which SKUs had most and least reviews?",
+        placeholder="Example: What were total number of reviews last month compared to this month for toothbrush category? Or Provide me item with least reviews and most reviews",
         disabled=not uploaded_file,
     )
 
@@ -155,7 +155,7 @@ if menu == "Insight Conversation":
             )
             st.plotly_chart(fig)
 
-        # Custom analysis for most and least values (e.g., SKUs with most/least reviews)
+        # Custom analysis for most and least values per month (e.g., SKUs with most/least reviews per month)
         elif "most" in question.lower() and "least" in question.lower() and "reviews" in question.lower():
             # Identify the column to analyze (default to 'reviews')
             value_column = 'reviews'
@@ -169,50 +169,67 @@ if menu == "Insight Conversation":
                 st.warning(f"Column '{group_column}' not found in the dataset.")
                 st.stop()
 
-            # Group by SKU and sum reviews
-            sku_reviews = df.groupby(group_column)[value_column].sum().reset_index()
+            # Extract month and year from date for grouping
+            df['month'] = df['date'].dt.month
+            df['year'] = df['date'].dt.year
+            df['month_year'] = df['date'].dt.strftime('%B %Y')  # e.g., "January 2025"
 
-            # Debug: Show grouped data
-            st.write("Grouped SKU Reviews:", sku_reviews)
+            # Group by month_year and SKU, sum reviews
+            sku_reviews = df.groupby(['month_year', 'month', 'year', group_column])[value_column].sum().reset_index()
 
             # Check if data is valid
             if sku_reviews.empty or sku_reviews[value_column].isna().all():
                 st.warning("No valid review data available for SKUs.")
                 st.stop()
 
-            # Find SKU with most reviews
-            max_reviews = sku_reviews[value_column].max()
-            most_skus = sku_reviews[sku_reviews[value_column] == max_reviews][group_column].tolist()
-            if not most_skus:
-                st.warning("No SKUs found with maximum reviews.")
-                most_skus = []
-                max_reviews = 0
-
-            # Find SKU with least reviews (excluding 0 to avoid invalid entries)
-            min_reviews = sku_reviews[sku_reviews[value_column] > 0][value_column].min() if (sku_reviews[value_column] > 0).any() else 0
-            least_skus = sku_reviews[sku_reviews[value_column] == min_reviews][group_column].tolist()
-            if not least_skus and min_reviews == 0:
-                st.warning("No SKUs found with least reviews (excluding 0).")
-                least_skus = []
-            elif not least_skus:
-                st.warning("No valid least reviews found.")
-                least_skus = []
-
+            # Analyze per month
             st.subheader("Analysis Results")
-            if most_skus:
-                st.write(f"SKU(s) with Most Reviews: {', '.join(map(str, most_skus))} (Total: {max_reviews})")
-            else:
-                st.write("No SKUs found with most reviews.")
-            if least_skus:
-                st.write(f"SKU(s) with Least Reviews: {', '.join(map(str, least_skus))} (Total: {min_reviews})")
-            else:
-                st.write("No SKUs found with least reviews.")
+            monthly_results = {}
+            for month_year in sku_reviews['month_year'].unique():
+                month_data = sku_reviews[sku_reviews['month_year'] == month_year]
 
+                # Find SKU with most reviews for this month
+                max_reviews = month_data[value_column].max()
+                most_skus = month_data[month_data[value_column] == max_reviews][group_column].tolist()
+                if not most_skus:
+                    most_skus = []
+                    max_reviews = 0
+
+                # Find SKU with least reviews for this month (excluding 0)
+                min_reviews = month_data[month_data[value_column] > 0][value_column].min() if (month_data[value_column] > 0).any() else 0
+                least_skus = month_data[month_data[value_column] == min_reviews][group_column].tolist()
+                if not least_skus and min_reviews == 0:
+                    least_skus = []
+                elif not least_skus:
+                    least_skus = []
+
+                monthly_results[month_year] = {
+                    'most_skus': most_skus,
+                    'max_reviews': max_reviews,
+                    'least_skus': least_skus,
+                    'min_reviews': min_reviews
+                }
+
+                # Display results for this month
+                st.write(f"For {month_year}:")
+                if most_skus:
+                    st.write(f"  SKU(s) with Most Reviews: {', '.join(map(str, most_skus))} (Total: {max_reviews})")
+                else:
+                    st.write(f"  No SKUs found with most reviews.")
+                if least_skus:
+                    st.write(f"  SKU(s) with Least Reviews: {', '.join(map(str, least_skus))} (Total: {min_reviews})")
+                else:
+                    st.write(f"  No SKUs found with least reviews.")
+
+            # Visualization (aggregate across months for simplicity)
+            # Find overall max and min for the chart
+            overall_max = max([result['max_reviews'] for result in monthly_results.values()])
+            overall_min = min([result['min_reviews'] for result in monthly_results.values() if result['min_reviews'] > 0])
             fig = go.Figure(data=[
-                go.Bar(x=['Most Reviews', 'Least Reviews'], y=[max_reviews, min_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
+                go.Bar(x=['Most Reviews (Overall)', 'Least Reviews (Overall)'], y=[overall_max, overall_min], marker_color=['#FF6B6B', '#4ECDC4'])
             ])
             fig.update_layout(
-                title=f"Review Extremes by SKU",
+                title=f"Review Extremes by SKU (Overall Across Months)",
                 xaxis_title="Category",
                 yaxis_title="Number of Reviews",
                 height=500,
