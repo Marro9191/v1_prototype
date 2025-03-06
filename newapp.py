@@ -113,17 +113,9 @@ if menu == "Insight Conversation":
         # Debug: Show first few rows to verify data
         st.write("Sample data:", df.head())
 
-        messages = [
-            {
-                "role": "user",
-                "content": f"Here's a document with columns: {list(df.columns)}. Data sample: {df.head().to_string()} \n\n---\n\n {question}"
-            }
-        ]
-        stream = client.chat.completions.create(model="gpt-3.5-turbo", messages=messages, stream=True)
-        st.subheader("Response")
-        st.write_stream(stream)
-
         # Custom analysis for review comparison
+        this_month_reviews = 0
+        last_month_reviews = 0
         if "reviews" in question.lower() and "last month" in question.lower() and "this month" in question.lower():
             current_date = datetime.now()
             current_month = current_date.month
@@ -149,6 +141,26 @@ if menu == "Insight Conversation":
 
             this_month_reviews = this_month_data['reviews'].sum() if 'reviews' in this_month_data.columns else 0
             last_month_reviews = last_month_data['reviews'].sum() if 'reviews' in last_month_data.columns else 0
+
+            # Prepare filtered data for OpenAI
+            relevant_data = pd.concat([last_month_data, this_month_data])
+            openai_data = relevant_data[['date', 'category', 'reviews']].to_string() if not relevant_data.empty else "No relevant data found."
+
+            messages = [
+                {
+                    "role": "user",
+                    "content": (
+                        f"Here is a dataset with columns: {list(df.columns)}. "
+                        f"Relevant data for the question (filtered for category '{category}' and last/this month):\n{openai_data}\n\n"
+                        f"---\n\nPlease calculate the total number of reviews last month (February 2025) "
+                        f"and this month (March 2025) for the '{category}' category, and compare them. "
+                        f"Sum the 'reviews' column for each month separately."
+                    )
+                }
+            ]
+            stream = client.chat.completions.create(model="gpt-3.5-turbo", messages=messages, stream=True)
+            st.subheader("Response")
+            st.write_stream(stream)
 
             st.subheader("Analysis Results")
             st.write(f"Total Reviews This Month: {this_month_reviews}")
