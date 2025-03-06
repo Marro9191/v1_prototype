@@ -81,28 +81,56 @@ def fetch_shopify_products():
         st.error(f"Error fetching Shopify data: {str(e)}")
         return pd.DataFrame()
 
-# Callback function to handle file upload
-def handle_upload():
-    uploaded_file = st.session_state.uploaded_file
-    if uploaded_file and uploaded_file.name not in st.session_state.get("uploaded_files", set()):
-        df = pd.read_csv(uploaded_file)
-        st.session_state.df_insight = df
-        st.session_state.uploaded_files.add(uploaded_file.name)
-        st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
-        st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
-        st.session_state.has_uploaded = True
+# Default CSV data as a string for Insight Conversation (restored)
+default_csv_data = """﻿date,image,SKU,promo,category,product,performance,returns,ratings,reviews,1st Page Rank,Sales
+20/01/2025,https://www.amazon.co.uk/Oral-B-Electric-Toothbrush-Travel-Designed/dp/B0DNG35BVM,1,12345,tootbrush,Jenny’s Electronic Toothbrush ,150,5,5,3000,100,1
+21/01/2025,,2,123123,hygiene,Competitor Toothbrush  ,120,3,5,200,5,2
+22/01/2025,,3,2334234,hygiene,Jenny’s Electronic Toothbrush,145,2,5,400,10,3
+23/01/2025,,4,656,hygiene,Jenny’s Electronic Toothbrush,145,2,5,30,30,4
+24/01/2025,,5,345345,hygiene,Jenny’s Electronic Toothbrush,145,2,5,10,12,5
+25/01/2025,,6,34535,hygiene,Jenny’s Electronic Toothbrush,145,2,5,11,39,6
+26/01/2025,,7,34555,hygiene,Jenny’s Electronic Toothbrush,145,2,5,5,100,7
+27/01/2025,,8,2342,hygiene,Jenny’s Electronic Toothbrush,145,2,5,5,121,8
+28/01/2025,,9,2345,hygiene,Jenny’s Electronic Toothbrush,145,2,5,5,2,9
+29/01/2025,,10,23422,hygiene,Jenny’s Electronic Toothbrush,145,2,5,5,34,10
+30/01/2025,,11,23422,hygiene,Jenny’s Electronic Toothbrush,145,2,3,5,39,11
+31/01/2025,,12,234324,hygiene,Jenny’s Electronic Toothbrush,145,2,3,5,55,12
+31/01/2025,,13,2423,hygiene,Jenny’s Electronic Toothbrush,145,2,3,5,56,13
+20/02/2025,,14,443,hygiene,Jenny’s Electronic Toothbrush,145,2,3,5,45,14
+21/02/2025,,15,35656,hygiene,Jenny’s Electronic Toothbrush,145,2,3,5,343,15
+22/02/2025,,16,56563,hygiene,Jenny’s Electronic Toothbrush,145,2,3,5,32,16
+23/02/2025,,17,345345,hygiene,Jenny’s Electronic Toothbrush,145,2,3,5,234,17
+24/02/2025,,18,6553,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,120,2234,18
+25/02/2025,,19,453,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,120,45,19
+26/02/2025,,20,34576,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,23,20
+27/02/2025,,21,4545,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,34,21
+28/02/2025,,22,4566,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,65,22
+01/03/2025,,23,353456,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,543,23
+02/03/2025,,24,656756,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,13,24
+03/03/2025,,25,754646,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,34,25
+04/03/2025,,26,345432,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,33,26
+05/03/2025,,27,34535,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,66,27
+06/03/2025,,28,4564,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,77,28
+07/03/2025,,29,4567,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,90,29
+08/03/2025,,30,45646,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,31,30
+09/03/2025,,31,445667,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,34,31
+10/03/2025,,32,2234,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,31,32"""
 
-# Initialize chat history and data for each tab (no preloaded data)
+# Add sidebar with menu items
+st.sidebar.title("Navigation")
+menu = st.sidebar.radio("Menu", ["Insight Conversation", "Shopify Catalog Analysis"])
+
+# Initialize chat history and data for each tab
 if "messages_insight" not in st.session_state:
     st.session_state.messages_insight = []
 if "messages_shopify" not in st.session_state:
     st.session_state.messages_shopify = []
-if "df_insight" not in st.session_state or st.session_state.df_insight.empty:
-    st.session_state.df_insight = pd.DataFrame()  # Ensure empty DataFrame at startup
+if "df_insight" not in st.session_state:
+    st.session_state.df_insight = pd.read_csv(io.StringIO(default_csv_data))  # Restore preloaded data
 if "uploaded_files" not in st.session_state:
     st.session_state.uploaded_files = set()  # Track unique file names
-if "has_uploaded" not in st.session_state:
-    st.session_state.has_uploaded = False  # Flag to track initial upload state
+if "last_uploaded_file" not in st.session_state:
+    st.session_state.last_uploaded_file = None  # Track the last uploaded file
 
 # Custom CSS to enforce layout
 st.markdown(
@@ -114,17 +142,17 @@ st.markdown(
         min-height: 100vh; /* Ensure content takes full height */
     }
     .input-wrapper {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        background-color: white;
-        padding: 10px;
-        z-index: 1001;
-        border-top: 1px solid #ccc;
-        display: flex;
-        flex-direction: column;
-        gap: 0px; /* No gap between uploader and chat input */
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        background-color: white !important;
+        padding: 10px !important;
+        z-index: 1001 !important;
+        border-top: 1px solid #ccc !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0px !important; /* No gap between uploader and chat input */
     }
     .stFileUploader {
         margin-bottom: 0px !important; /* Remove space below uploader */
@@ -142,7 +170,7 @@ st.markdown(
 # Display chat interface based on selected tab
 if menu == "Insight Conversation":
     st.title("📄 Comcore Prototype v1")
-    st.write("Upload a CSV file and ask me about your data! (e.g., 'What were the total number of reviews per month?')")
+    st.write("Chat with me about your data! Upload a CSV or ask about reviews, sales, or specific months. Default data is pre-loaded.")
 
     # Main container for chat messages and responses (above input)
     with st.container():
@@ -151,17 +179,22 @@ if menu == "Insight Conversation":
         for message in st.session_state.messages_insight:
             with st.chat_message(message["role"]):
                 st.write(message["content"])
-        # Check if no data is loaded and prompt user
-        if st.session_state.df_insight.empty and not st.session_state.has_uploaded:
-            st.write("Please upload a CSV file to start analyzing your data.")
         st.markdown('</div>', unsafe_allow_html=True)
 
     # Input container at the bottom with CSS styling
     with st.container():
         st.markdown('<div class="input-wrapper">', unsafe_allow_html=True)
-        # File uploader with callback to handle upload event
-        st.file_uploader("Upload a CSV file", type=["csv"], key="uploaded_file", on_change=handle_upload, help="Upload your data file to analyze.")
-        
+        # File uploader placed just above the chat input
+        uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
+        if uploaded_file and uploaded_file.name != st.session_state.last_uploaded_file:
+            df = pd.read_csv(uploaded_file)
+            st.session_state.df_insight = df
+            st.session_state.last_uploaded_file = uploaded_file.name
+            if uploaded_file.name not in st.session_state.uploaded_files:
+                st.session_state.uploaded_files.add(uploaded_file.name)
+                st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
+                st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
+
         # Chat input for Insight Conversation, directly below the file uploader
         if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
             st.session_state.messages_insight.append({"role": "user", "content": prompt})
@@ -177,7 +210,7 @@ if menu == "Insight Conversation":
             if df['date'].isna().all():
                 st.warning("No valid dates found in the 'date' column. Please ensure dates are in DD/MM/YYYY format.")
                 st.stop()
-            st.write(f"Loaded {len(df)} rows from uploaded CSV.")  # Debug row count
+            st.write(f"Loaded {len(df)} rows from {'uploaded CSV' if uploaded_file else 'default data'}.")  # Debug row count
             df['month_year'] = df['date'].dt.strftime('%B %Y')
             df['category'] = df['category'].str.lower().replace("tootbrush", "toothbrush")
 
@@ -191,7 +224,7 @@ if menu == "Insight Conversation":
             # Process the query
             if "total number of reviews per month" in prompt.lower():
                 if 'reviews' not in df.columns:
-                    st.warning("The 'reviews' column is not found in the uploaded data.")
+                    st.warning("The 'reviews' column is not found in the data.")
                     st.stop()
                 monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
                 openai_data = monthly_reviews.to_string()
@@ -250,7 +283,7 @@ if menu == "Insight Conversation":
 
             elif "compared to" in prompt.lower() and "reviews" in prompt.lower():
                 if 'reviews' not in df.columns:
-                    st.warning("The 'reviews' column is not found in the uploaded data.")
+                    st.warning("The 'reviews' column is not found in the data.")
                     st.stop()
                 months = re.findall(r'\b(January|February|March|April|May|June|July|August|September|October|November|December)\b', prompt, re.IGNORECASE)
                 if len(months) >= 2:
@@ -297,7 +330,7 @@ if menu == "Insight Conversation":
 
             elif "reviews" in prompt.lower() and ("last month" in prompt.lower() or "this month" in prompt.lower()):
                 if 'reviews' not in df.columns:
-                    st.warning("The 'reviews' column is not found in the uploaded data.")
+                    st.warning("The 'reviews' column is not found in the data.")
                     st.stop()
                 current_date = datetime.now()
                 current_month = current_date.month
@@ -364,7 +397,7 @@ if menu == "Insight Conversation":
                 if not metric:
                     metric = "reviews" if "reviews" in df.columns else None
                     if not metric:
-                        st.warning("No 'sales' or 'reviews' column found in the uploaded data.")
+                        st.warning("No 'sales' or 'reviews' column found in the data.")
                         st.stop()
                 group_column = entity.lower() if entity.lower() in df.columns else "SKU"
                 if group_column not in df.columns:
