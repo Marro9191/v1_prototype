@@ -114,6 +114,9 @@ if menu == "Insight Conversation":
         # Create month_year column before filtering
         df['month_year'] = df['date'].dt.strftime('%B %Y')
 
+        # Normalize category names
+        df['category'] = df['category'].str.lower().replace("tootbrush", "toothbrush")
+
         # Single OpenAI response
         messages = [{"role": "user", "content": f"Here's a document: {document} \n\n---\n\n {question}"}]
         stream = client.chat.completions.create(model="gpt-3.5-turbo", messages=messages, stream=True)
@@ -164,8 +167,8 @@ if menu == "Insight Conversation":
             category = "toothbrush" if "toothbrush" in question.lower() else None
             df_filtered = df[df['category'].str.lower().str.contains("toot?brush", na=False)] if category else df
 
-            # Group by month_year, sum reviews
-            monthly_reviews = df_filtered.groupby('month_year')['reviews'].sum().reset_index()
+            # Group by month_year and category, sum reviews
+            monthly_reviews = df_filtered.groupby(['month_year', 'category'])['reviews'].sum().reset_index()
 
             # Prepare data for OpenAI
             openai_data = monthly_reviews.to_string()
@@ -174,7 +177,7 @@ if menu == "Insight Conversation":
                     "role": "user",
                     "content": (
                         f"Here's a dataset with columns: {list(df.columns)}. "
-                        f"Grouped data by month and summed reviews:\n{openai_data}\n\n"
+                        f"Grouped data by month and category, summed reviews:\n{openai_data}\n\n"
                         f"---\n\nCalculate the total number of reviews per month. {f'Filter by toothbrush category if specified.' if category else ''} The query is: {question}"
                     )
                 }
@@ -185,20 +188,23 @@ if menu == "Insight Conversation":
 
             st.subheader("Analysis Results")
             for index, row in monthly_reviews.iterrows():
-                st.write(f"{row['month_year']}: {row['reviews']} reviews")
+                st.write(f"{row['month_year']} - {row['category'].capitalize()}: {row['reviews']} reviews")
 
-            # Generate automatic bar chart with three different colors and legend
-            colors = ['#FF6B6B', '#4ECDC4', '#45B7D1']  # Three distinct colors
+            # Generate automatic bar chart with different colors for each category
+            colors = {'toothbrush': '#FF6B6B', 'hygiene': '#4ECDC4'}  # Define colors for categories
             data_traces = []
-            for i, (index, row) in enumerate(monthly_reviews.iterrows()):
+            unique_months = monthly_reviews['month_year'].unique()
+
+            for cat in monthly_reviews['category'].unique():
+                cat_data = monthly_reviews[monthly_reviews['category'] == cat]
                 data_traces.append(go.Bar(
-                    x=[row['month_year']],
-                    y=[row['reviews']],
-                    name=row['month_year'],
-                    marker_color=colors[i % len(colors)]
+                    x=unique_months,
+                    y=[cat_data[cat_data['month_year'] == month]['reviews'].sum() if month in cat_data['month_year'].values else 0 for month in unique_months],
+                    name=cat.capitalize(),
+                    marker_color=colors.get(cat, '#45B7D1')  # Default color if category not in colors dict
                 ))
 
-            chart_title = f"Total Reviews Per Month - {category if category else 'All Categories'} Category"
+            chart_title = "Total Reviews Per Month by Category"
             fig = go.Figure(data=data_traces)
             fig.update_layout(
                 title=chart_title,
@@ -206,7 +212,7 @@ if menu == "Insight Conversation":
                 yaxis_title="Number of Reviews",
                 height=500,
                 width=700,
-                barmode='group',  # Ensure bars are grouped if more data is added
+                barmode='group',  # Group bars by category
                 showlegend=True
             )
             st.plotly_chart(fig)
@@ -289,7 +295,7 @@ if menu == "Insight Conversation":
             else:
                 st.warning("No numeric columns available for charting.")
         else:
-            st.warning("The uploaded data is empty")
+            st.warning("The uploaded data is empty.")
 
 # Shopify Catalog Analysis
 elif menu == "Shopify Catalog Analysis":
@@ -394,4 +400,4 @@ elif menu == "Shopify Catalog Analysis":
                 else:
                     st.warning("No numeric columns available for charting.")
             else:
-                st.warning("The fetched Shopify data is empty")
+                st.warning("The fetched Shopify data is empty.")
