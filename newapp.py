@@ -92,7 +92,6 @@ def reset_session_state():
     st.session_state.upload_message_added = {}
     st.session_state.last_uploaded_file = None
     st.session_state.messages_shopify = []
-    # Clear any cached data (optional, for safety)
     st.cache_data.clear()
 
 # Call reset at the start of the app
@@ -203,17 +202,20 @@ if menu == "Insight Conversation":
                 st.stop()
             st.write(f"Loaded {len(df)} rows from uploaded CSV.")  # Debug row count
             df['month_year'] = df['date'].dt.strftime('%B %Y')
-            df['category'] = df['category'].str.lower().replace("tootbrush", "toothbrush")
+            df['category'] = df['category'].str.lower()
 
-            # Dynamic category filtering
+            # Dynamic category filtering with debug
             category_filter = None
             categories = df['category'].unique()
+            st.write(f"Debug: Available categories: {categories}")  # Debug output
             for cat in categories:
                 if cat in prompt.lower():
                     category_filter = cat
+                    st.write(f"Debug: Detected category filter: {category_filter}")
                     break
             if not category_filter and ("all categories" in prompt.lower() or "all" in prompt.lower()):
                 category_filter = None
+                st.write("Debug: Using all categories filter")
             df_filtered = df if category_filter is None else df[df['category'] == category_filter]
 
             # Process the query
@@ -227,6 +229,7 @@ if menu == "Insight Conversation":
                     month1_reviews = month1_data['reviews'].sum() if 'reviews' in month1_data.columns else 0
                     month2_reviews = month2_data['reviews'].sum() if 'reviews' in month2_data.columns else 0
 
+                    st.write(f"Debug: {month1} 2025 reviews: {month1_reviews}, {month2} 2025 reviews: {month2_reviews}")  # Debug output
                     messages = [
                         {
                             "role": "user",
