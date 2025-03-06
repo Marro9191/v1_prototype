@@ -149,7 +149,6 @@ if menu == "Insight Conversation":
         st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
         with st.chat_message("assistant"):
             st.write("Great! I’ve loaded your CSV file. Feel free to ask questions about it!")
-        st.rerun()
 
     # Chat input for Insight Conversation
     if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
@@ -182,10 +181,9 @@ if menu == "Insight Conversation":
                 {
                     "role": "user",
                     "content": (
-                        f"Based on the provided data, provide a single, user-friendly, concise, and precise summary of the total number of reviews per month for all categories. "
+                        f"Based on the provided data, provide a friendly and concise summary of the total number of reviews per month for all categories. "
                         f"Use the following grouped data with columns: {list(monthly_reviews.columns)}. "
-                        f"Data:\n{openai_data}\n\n---\n\n {prompt} Include the data in the response without repeating information. "
-                        f"Example: 'Hey! The data shows a peak in January 2025 with 3000 reviews for Toothbrush! Here’s the breakdown: {openai_data}'"
+                        f"Data:\n{openai_data}\n\n---\n\n {prompt} (e.g., 'Hey! The data shows a peak in January 2025 with 3000 reviews for Toothbrush!')"
                     )
                 }
             ]
@@ -193,7 +191,20 @@ if menu == "Insight Conversation":
             st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
             with st.chat_message("assistant"):
                 st.write(response.choices[0].message.content)
-            st.rerun()
+
+            monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
+            seen = set()
+            unique_results = []
+            for index, row in monthly_reviews.iterrows():
+                key = (row['month_year'], row['category'])
+                if key not in seen:
+                    unique_results.append(row)
+                    seen.add(key)
+            monthly_reviews = pd.DataFrame(unique_results)
+
+            with st.chat_message("assistant"):
+                st.write("### Analysis Results")
+                st.table(monthly_reviews.style.format({'reviews': '{:,.0f}'}))
 
             colors = {'toothbrush': '#FF6B6B', 'hygiene': '#4ECDC4'}
             data_traces = []
@@ -216,7 +227,8 @@ if menu == "Insight Conversation":
                 barmode='group',
                 showlegend=True
             )
-            st.session_state.messages_insight.append({"role": "assistant", "content": fig})
+            with st.chat_message("assistant"):
+                st.plotly_chart(fig)
 
         elif "compared to" in prompt.lower() and "reviews" in prompt.lower():
             # Extract the two months from the query
@@ -233,9 +245,9 @@ if menu == "Insight Conversation":
                     {
                         "role": "user",
                         "content": (
-                            f"Provide a single, user-friendly, concise, and precise comparison of the total number of reviews for the {category_filter or 'all'} category "
+                            f"Provide a friendly and concise comparison of the total number of reviews for the {category_filter or 'all'} category "
                             f"between {month1} 2025 and {month2} 2025. The data shows {month1} 2025 had {month1_reviews} reviews, "
-                            f"and {month2} 2025 had {month2_reviews} reviews. Include the counts without repeating information. "
+                            f"and {month2} 2025 had {month2_reviews} reviews. "
                             f"Example: 'Hey! The total number of reviews for the toothbrush category in {month1} 2025 was {month1_reviews}, compared to {month2_reviews} in {month2} 2025!'"
                         )
                     }
@@ -244,7 +256,11 @@ if menu == "Insight Conversation":
                 st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
                 with st.chat_message("assistant"):
                     st.write(response.choices[0].message.content)
-                st.rerun()
+
+                with st.chat_message("assistant"):
+                    st.write("### Analysis Results")
+                    st.write(f"{month1} 2025: {month1_reviews} reviews")
+                    st.write(f"{month2} 2025: {month2_reviews} reviews")
 
                 fig = go.Figure(data=[
                     go.Bar(x=[month1 + " 2025", month2 + " 2025"], y=[month1_reviews, month2_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
@@ -256,7 +272,8 @@ if menu == "Insight Conversation":
                     height=500,
                     width=700
                 )
-                st.session_state.messages_insight.append({"role": "assistant", "content": fig})
+                with st.chat_message("assistant"):
+                    st.plotly_chart(fig)
 
         elif "reviews" in prompt.lower() and ("last month" in prompt.lower() or "this month" in prompt.lower()):
             current_date = datetime.now()
@@ -284,9 +301,9 @@ if menu == "Insight Conversation":
                 {
                     "role": "user",
                     "content": (
-                        f"Provide a single, user-friendly, concise, and precise comparison of the total number of reviews for the {category_filter or 'all'} category "
+                        f"Provide a friendly and concise comparison of the total number of reviews for the {category_filter or 'all'} category "
                         f"between last month and this month. The data shows last month had {last_month_reviews} reviews, "
-                        f"and this month had {this_month_reviews} reviews. Include the counts without repeating information. "
+                        f"and this month had {this_month_reviews} reviews. "
                         f"Example: 'Hey! Last month had {last_month_reviews} reviews, while this month has {this_month_reviews} for the toothbrush category!'"
                     )
                 }
@@ -295,7 +312,11 @@ if menu == "Insight Conversation":
             st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
             with st.chat_message("assistant"):
                 st.write(response.choices[0].message.content)
-            st.rerun()
+
+            with st.chat_message("assistant"):
+                st.write("### Analysis Results")
+                st.write(f"This Month: {this_month_reviews} reviews")
+                st.write(f"Last Month: {last_month_reviews} reviews")
 
             fig = go.Figure(data=[
                 go.Bar(x=['Last Month', 'This Month'], y=[last_month_reviews, this_month_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
@@ -307,7 +328,8 @@ if menu == "Insight Conversation":
                 height=500,
                 width=700
             )
-            st.session_state.messages_insight.append({"role": "assistant", "content": fig})
+            with st.chat_message("assistant"):
+                st.plotly_chart(fig)
 
         elif any(word in prompt.lower() for word in ["most", "least"]):
             entity = "SKU" if "sku" in prompt.lower() else "product"
@@ -331,35 +353,31 @@ if menu == "Insight Conversation":
                 st.warning(f"No valid {metric} data available for {entity}s.")
                 st.stop()
 
-            result = f"Here’s the breakdown of the most and least {metric} by {entity}:\n\n"
-            for month_year in entity_metrics['month_year'].unique():
-                month_data = entity_metrics[entity_metrics['month_year'] == month_year]
-                max_value = month_data[metric].max()
-                most_entities = month_data[month_data[metric] == max_value][group_column].tolist()
-                most_entities_str = ", ".join(most_entities) if len(most_entities) > 1 else most_entities[0]
-
-                min_value = month_data[month_data[metric] > 0][metric].min() if (month_data[metric] > 0).any() else 0
-                least_entities = month_data[month_data[metric] == min_value][group_column].tolist() if min_value > 0 else [None]
-                least_entities_str = ", ".join(filter(None, least_entities)) if len(least_entities) > 1 else (least_entities[0] if least_entities[0] else "None")
-
-                result += f"{month_year}: Most {metric}: {most_entities_str} ({max_value}), Least {metric}: {least_entities_str} ({min_value if min_value > 0 else 0})\n"
-            st.session_state.messages_insight.append({"role": "assistant", "content": result})
             with st.chat_message("assistant"):
-                st.write(result)
-            st.rerun()
+                st.write("### Analysis Results")
+                for month_year in entity_metrics['month_year'].unique():
+                    month_data = entity_metrics[entity_metrics['month_year'] == month_year]
+                    max_value = month_data[metric].max()
+                    most_entities = month_data[month_data[metric] == max_value][group_column].tolist()
+                    most_entities_str = ", ".join(most_entities) if len(most_entities) > 1 else most_entities[0]
+
+                    min_value = month_data[month_data[metric] > 0][metric].min() if (month_data[metric] > 0).any() else 0
+                    least_entities = month_data[month_data[metric] == min_value][group_column].tolist() if min_value > 0 else [None]
+                    least_entities_str = ", ".join(filter(None, least_entities)) if len(least_entities) > 1 else (least_entities[0] if least_entities[0] else "None")
+
+                    st.write(f"{month_year}: Most {metric}: {most_entities_str} ({max_value}), Least {metric}: {least_entities_str} ({min_value if min_value > 0 else 0})")
 
         else:
             messages = [
                 {
                     "role": "user",
-                    "content": f"Provide a single, user-friendly, concise, and precise response. I don’t fully understand your question about the data. Could you please ask about reviews, sales, or specific months? For example, 'What were the total number of reviews per month?' or 'Which SKU had the most sales?' Or upload a CSV file to start!"
+                    "content": f"Provide a friendly response. I don’t fully understand your question about the data. Could you please ask about reviews, sales, or specific months? For example, 'What were the total number of reviews per month?' or 'Which SKU had the most sales?' Or upload a CSV file to start!"
                 }
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
             st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
             with st.chat_message("assistant"):
                 st.write(response.choices[0].message.content)
-            st.rerun()
 
 elif menu == "Shopify Catalog Analysis":
     st.title("🛒 Shopify Catalog Analysis")
