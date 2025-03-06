@@ -127,13 +127,80 @@ if "messages_shopify" not in st.session_state:
     st.session_state.messages_shopify = []
 if "df_insight" not in st.session_state:
     st.session_state.df_insight = pd.read_csv(io.StringIO(default_csv_data))
+if "insight_first_load" not in st.session_state:
+    st.session_state.insight_first_load = True
 
 # Display chat interface based on selected tab
 if menu == "Insight Conversation":
     st.title("📄 Comcore Prototype v1")
     st.write("Chat with me about your data! Upload a CSV or ask about reviews, sales, or specific months. Default data is pre-loaded.")
 
-    # Display chat messages for Insight Conversation
+    # Default query on first load
+    if st.session_state.insight_first_load:
+        default_query = "What were total number of reviews in January compared to February for toothbrush category?"
+        st.session_state.messages_insight.append({"role": "user", "content": default_query})
+        with st.chat_message("user"):
+            st.write(default_query)
+        st.session_state.insight_first_load = False
+
+        # Load and process default data
+        df = st.session_state.df_insight
+        df['date'] = pd.to_datetime(df['date'], format='%d/%m/%Y', errors='coerce')
+        if df['date'].isna().all():
+            st.warning("No valid dates found in the 'date' column. Please ensure dates are in DD/MM/YYYY format.")
+            st.stop()
+        st.write(f"Loaded {len(df)} rows from default data.")  # Debug row count
+        df['month_year'] = df['date'].dt.strftime('%B %Y')
+        df['category'] = df['category'].str.lower().replace("tootbrush", "toothbrush")
+
+        category_filter = "toothbrush"
+        df_filtered = df if category_filter is None else df[df['category'] == category_filter]
+
+        # Process the default query
+        months = re.findall(r'\b(January|February|March|April|May|June|July|August|September|October|November|December)\b', default_query, re.IGNORECASE)
+        if len(months) >= 2:
+            month1, month2 = months[0], months[1]
+            month1_data = df_filtered[df_filtered['month_year'].str.contains(month1, case=False, na=False)]
+            month2_data = df_filtered[df_filtered['month_year'].str.contains(month2, case=False, na=False)]
+
+            month1_reviews = month1_data['reviews'].sum() if 'reviews' in month1_data.columns else 0
+            month2_reviews = month2_data['reviews'].sum() if 'reviews' in month2_data.columns else 0
+
+            messages = [
+                {
+                    "role": "user",
+                    "content": (
+                        f"Provide a friendly and concise comparison of the total number of reviews for the {category_filter or 'all'} category "
+                        f"between {month1} 2025 and {month2} 2025. The data shows {month1} 2025 had {month1_reviews} reviews, "
+                        f"and {month2} 2025 had {month2_reviews} reviews. "
+                        f"Example: 'Hey! The total number of reviews for the toothbrush category in {month1} 2025 was {month1_reviews}, compared to {month2_reviews} in {month2} 2025!'"
+                    )
+                }
+            ]
+            response = client.chat.completions.create(model="gpt-4o", messages=messages)
+            st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
+            with st.chat_message("assistant"):
+                st.write(response.choices[0].message.content)
+
+            with st.chat_message("assistant"):
+                st.write("### Analysis Results")
+                st.write(f"{month1} 2025: {month1_reviews} reviews")
+                st.write(f"{month2} 2025: {month2_reviews} reviews")
+
+            fig = go.Figure(data=[
+                go.Bar(x=[month1 + " 2025", month2 + " 2025"], y=[month1_reviews, month2_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
+            ])
+            fig.update_layout(
+                title=f"Reviews Comparison - {category_filter.capitalize() if category_filter else 'All Categories'} ({month1} vs {month2})",
+                xaxis_title="Month",
+                yaxis_title="Number of Reviews",
+                height=500,
+                width=700
+            )
+            with st.chat_message("assistant"):
+                st.plotly_chart(fig)
+
+    # Display chat messages for Insight Conversation (after default query)
     for message in st.session_state.messages_insight:
         with st.chat_message(message["role"]):
             st.write(message["content"])
