@@ -132,6 +132,171 @@ if "insight_first_load" not in st.session_state:
 if "shopify_first_load" not in st.session_state:
     st.session_state.shopify_first_load = True
 
+# Function to process Shopify query (to avoid duplication)
+def process_shopify_query(prompt, messages_list):
+    with st.spinner("Fetching Shopify catalog data via GraphQL..."):
+        df = fetch_shopify_products()
+
+    if df.empty:
+        messages_list.append({"role": "assistant", "content": "Oops! I couldn’t fetch the Shopify data. Please check your API credentials."})
+        with st.chat_message("assistant"):
+            st.write("Oops! I couldn’t fetch the Shopify data. Please check your API credentials.")
+    else:
+        document = df.to_string()
+        if "products are out of stock" in prompt.lower() and "how many" in prompt.lower():
+            out_of_stock = df[df['inventory_quantity'] == 0]
+            out_of_stock_count = len(out_of_stock)
+            in_stock_count = len(df[df['inventory_quantity'] > 0])
+
+            if out_of_stock_count > 0:
+                out_of_stock_list = out_of_stock[['title', 'sku']].drop_duplicates().to_dict('records')
+                messages = [
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a friendly and concise response. "
+                            f"List the out-of-stock products with their titles and quantities (0), and say something like 'Hey there! We’ve checked your stock, "
+                            f"and here are the products currently out of stock: [list]. Time to restock!' Avoid technical details unless asked."
+                        )
+                    }
+                ]
+                response = client.chat.completions.create(model="gpt-4o", messages=messages)
+                messages_list.append({"role": "assistant", "content": response.choices[0].message.content})
+                with st.chat_message("assistant"):
+                    st.write(response.choices[0].message.content)
+
+                with st.chat_message("assistant"):
+                    st.write("### Analysis Results")
+                    st.write(f"Total number of out-of-stock products: {out_of_stock_count}")
+                    for item in out_of_stock_list:
+                        st.write(f"- Product: {item['title']} (SKU: {item['sku']}) - 0 items in stock")
+
+                fig = go.Figure(data=[
+                    go.Pie(
+                        labels=['In Stock', 'Out of Stock'],
+                        values=[in_stock_count, out_of_stock_count],
+                        marker_colors=['#4ECDC4', '#FF6B6B'],
+                        textinfo='label+percent',
+                        hole=0.3
+                    )
+                ])
+                fig.update_layout(
+                    title="Stock Status: In Stock vs Out of Stock",
+                    height=500,
+                    width=700,
+                    showlegend=True
+                )
+                with st.chat_message("assistant"):
+                    st.plotly_chart(fig)
+
+            else:
+                messages = [
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a friendly and concise response. "
+                            f"Say something like 'Hey there! We’ve checked your stock, and great news—there are no products out of stock right now!'"
+                        )
+                    }
+                ]
+                response = client.chat.completions.create(model="gpt-4o", messages=messages)
+                messages_list.append({"role": "assistant", "content": response.choices[0].message.content})
+                with st.chat_message("assistant"):
+                    st.write(response.choices[0].message.content)
+
+                with st.chat_message("assistant"):
+                    st.write("### Analysis Results")
+                    st.write("Great news! There are no products out of stock right now.")
+
+                fig = go.Figure(data=[
+                    go.Pie(
+                        labels=['In Stock', 'Out of Stock'],
+                        values=[in_stock_count, out_of_stock_count],
+                        marker_colors=['#4ECDC4', '#FF6B6B'],
+                        textinfo='label+percent',
+                        hole=0.3
+                    )
+                ])
+                fig.update_layout(
+                    title="Stock Status: In Stock vs Out of Stock",
+                    height=500,
+                    width=700,
+                    showlegend=True
+                )
+                with st.chat_message("assistant"):
+                    st.plotly_chart(fig)
+
+        elif "last month" in prompt.lower() and "this month" in prompt.lower():
+            current_date = datetime.now()
+            current_month = current_date.month
+            current_year = current_date.year
+            last_month_year = current_year - 1 if current_month == 1 else current_year
+            last_month = 12 if current_month == 1 else current_month - 1
+
+            category = "Electronics" if "electronics" in prompt.lower() else None
+            df_filtered = df[df['category'].str.lower() == category.lower()] if category else df
+
+            this_month_data = df_filtered[
+                (df_filtered['updated_at'].dt.month == current_month) & 
+                (df_filtered['updated_at'].dt.year == current_year)
+            ]
+            last_month_data = df_filtered[
+                (df_filtered['updated_at'].dt.month == last_month) & 
+                (df_filtered['updated_at'].dt.year == last_month_year)
+            ]
+
+            this_month_count = this_month_data.shape[0]
+            last_month_count = last_month_data.shape[0]
+
+            messages = [
+                {
+                    "role": "user",
+                    "content": (
+                        f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a friendly and concise response. "
+                        f"The data shows last month had {last_month_count} product updates, and this month has {this_month_count} product updates. "
+                        f"Example: 'Hey! Last month saw {last_month_count} product updates, while this month has {this_month_count} for the {category or 'all'} category!'"
+                    )
+                }
+            ]
+            response = client.chat.completions.create(model="gpt-4o", messages=messages)
+            messages_list.append({"role": "assistant", "content": response.choices[0].message.content})
+            with st.chat_message("assistant"):
+                st.write(response.choices[0].message.content)
+
+            with st.chat_message("assistant"):
+                st.write("### Analysis Results")
+                st.write(f"This Month: {this_month_count} products")
+                st.write(f"Last Month: {last_month_count} products")
+
+            fig = go.Figure(data=[
+                go.Bar(x=['Last Month', 'This Month'], y=[last_month_count, this_month_count], marker_color=['#FF6B6B', '#4ECDC4'])
+            ])
+            fig.update_layout(
+                title=f"Product Updates Comparison - {category if category else 'All Categories'}",
+                xaxis_title="Period",
+                yaxis_title="Number of Products Updated",
+                height=500,
+                width=700
+            )
+            with st.chat_message("assistant"):
+                st.plotly_chart(fig)
+
+        else:
+            messages = [
+                {
+                    "role": "user",
+                    "content": (
+                        f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a friendly and concise response. "
+                        f"If the question is unclear, suggest options like 'Hey! You can ask me about stock levels (e.g., Which products are out of stock?) "
+                        f"or product updates (e.g., How many products were updated last month?).'"
+                    )
+                }
+            ]
+            response = client.chat.completions.create(model="gpt-4o", messages=messages)
+            messages_list.append({"role": "assistant", "content": response.choices[0].message.content})
+            with st.chat_message("assistant"):
+                st.write(response.choices[0].message.content)
+
 # Display chat interface based on selected tab
 if menu == "Insight Conversation":
     st.title("📄 Comcore Prototype v1")
@@ -460,96 +625,7 @@ elif menu == "Shopify Catalog Analysis":
             st.write(default_query)
         st.session_state.shopify_first_load = False
 
-        with st.spinner("Fetching Shopify catalog data via GraphQL..."):
-            df = fetch_shopify_products()
-
-        if df.empty:
-            st.session_state.messages_shopify.append({"role": "assistant", "content": "Oops! I couldn’t fetch the Shopify data. Please check your API credentials."})
-            with st.chat_message("assistant"):
-                st.write("Oops! I couldn’t fetch the Shopify data. Please check your API credentials.")
-        else:
-            document = df.to_string()
-            out_of_stock = df[df['inventory_quantity'] == 0]
-            out_of_stock_count = len(out_of_stock)
-            in_stock_count = len(df[df['inventory_quantity'] > 0])
-
-            if out_of_stock_count > 0:
-                out_of_stock_list = out_of_stock[['title', 'sku']].drop_duplicates().to_dict('records')
-                messages = [
-                    {
-                        "role": "user",
-                        "content": (
-                            f"Here's the Shopify catalog data: {document} \n\n---\n\n {default_query} Provide a friendly and concise response. "
-                            f"List the out-of-stock products with their titles and quantities (0), and say something like 'Hey there! We’ve checked your stock, "
-                            f"and here are the products currently out of stock: [list]. Time to restock!' Avoid technical details unless asked."
-                        )
-                    }
-                ]
-                response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
-                with st.chat_message("assistant"):
-                    st.write(response.choices[0].message.content)
-
-                with st.chat_message("assistant"):
-                    st.write("### Analysis Results")
-                    st.write(f"Total number of out-of-stock products: {out_of_stock_count}")
-                    for item in out_of_stock_list:
-                        st.write(f"- Product: {item['title']} (SKU: {item['sku']}) - 0 items in stock")
-
-                fig = go.Figure(data=[
-                    go.Pie(
-                        labels=['In Stock', 'Out of Stock'],
-                        values=[in_stock_count, out_of_stock_count],
-                        marker_colors=['#4ECDC4', '#FF6B6B'],
-                        textinfo='label+percent',
-                        hole=0.3
-                    )
-                ])
-                fig.update_layout(
-                    title="Stock Status: In Stock vs Out of Stock",
-                    height=500,
-                    width=700,
-                    showlegend=True
-                )
-                with st.chat_message("assistant"):
-                    st.plotly_chart(fig)
-
-            else:
-                messages = [
-                    {
-                        "role": "user",
-                        "content": (
-                            f"Here's the Shopify catalog data: {document} \n\n---\n\n {default_query} Provide a friendly and concise response. "
-                            f"Say something like 'Hey there! We’ve checked your stock, and great news—there are no products out of stock right now!'"
-                        )
-                    }
-                ]
-                response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
-                with st.chat_message("assistant"):
-                    st.write(response.choices[0].message.content)
-
-                with st.chat_message("assistant"):
-                    st.write("### Analysis Results")
-                    st.write("Great news! There are no products out of stock right now.")
-
-                fig = go.Figure(data=[
-                    go.Pie(
-                        labels=['In Stock', 'Out of Stock'],
-                        values=[in_stock_count, out_of_stock_count],
-                        marker_colors=['#4ECDC4', '#FF6B6B'],
-                        textinfo='label+percent',
-                        hole=0.3
-                    )
-                ])
-                fig.update_layout(
-                    title="Stock Status: In Stock vs Out of Stock",
-                    height=500,
-                    width=700,
-                    showlegend=True
-                )
-                with st.chat_message("assistant"):
-                    st.plotly_chart(fig)
+        process_shopify_query(default_query, st.session_state.messages_shopify)
 
     # Display chat messages for Shopify Catalog Analysis (after default query)
     for message in st.session_state.messages_shopify:
@@ -558,169 +634,11 @@ elif menu == "Shopify Catalog Analysis":
 
     # Chat input for Shopify Catalog Analysis
     if prompt := st.chat_input("Ask me about your Shopify catalog! (e.g., 'Which products are out of stock, and how many?')"):
+        # Avoid reprocessing the default query if it matches
+        if prompt == "Which products are out of stock, and how many?" and len(st.session_state.messages_shopify) > 1:
+            continue  # Skip processing since default query was already handled
         st.session_state.messages_shopify.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.write(prompt)
 
-        with st.spinner("Fetching Shopify catalog data via GraphQL..."):
-            df = fetch_shopify_products()
-
-        if df.empty:
-            st.session_state.messages_shopify.append({"role": "assistant", "content": "Oops! I couldn’t fetch the Shopify data. Please check your API credentials."})
-            with st.chat_message("assistant"):
-                st.write("Oops! I couldn’t fetch the Shopify data. Please check your API credentials.")
-        else:
-            document = df.to_string()
-            if "products are out of stock" in prompt.lower() and "how many" in prompt.lower():
-                out_of_stock = df[df['inventory_quantity'] == 0]
-                out_of_stock_count = len(out_of_stock)
-                in_stock_count = len(df[df['inventory_quantity'] > 0])
-
-                if out_of_stock_count > 0:
-                    out_of_stock_list = out_of_stock[['title', 'sku']].drop_duplicates().to_dict('records')
-                    messages = [
-                        {
-                            "role": "user",
-                            "content": (
-                                f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a friendly and concise response. "
-                                f"List the out-of-stock products with their titles and quantities (0), and say something like 'Hey there! We’ve checked your stock, "
-                                f"and here are the products currently out of stock: [list]. Time to restock!' Avoid technical details unless asked."
-                            )
-                        }
-                    ]
-                    response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                    st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
-                    with st.chat_message("assistant"):
-                        st.write(response.choices[0].message.content)
-
-                    with st.chat_message("assistant"):
-                        st.write("### Analysis Results")
-                        st.write(f"Total number of out-of-stock products: {out_of_stock_count}")
-                        for item in out_of_stock_list:
-                            st.write(f"- Product: {item['title']} (SKU: {item['sku']}) - 0 items in stock")
-
-                    fig = go.Figure(data=[
-                        go.Pie(
-                            labels=['In Stock', 'Out of Stock'],
-                            values=[in_stock_count, out_of_stock_count],
-                            marker_colors=['#4ECDC4', '#FF6B6B'],
-                            textinfo='label+percent',
-                            hole=0.3
-                        )
-                    ])
-                    fig.update_layout(
-                        title="Stock Status: In Stock vs Out of Stock",
-                        height=500,
-                        width=700,
-                        showlegend=True
-                    )
-                    with st.chat_message("assistant"):
-                        st.plotly_chart(fig)
-
-                else:
-                    messages = [
-                        {
-                            "role": "user",
-                            "content": (
-                                f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a friendly and concise response. "
-                                f"Say something like 'Hey there! We’ve checked your stock, and great news—there are no products out of stock right now!'"
-                            )
-                        }
-                    ]
-                    response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                    st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
-                    with st.chat_message("assistant"):
-                        st.write(response.choices[0].message.content)
-
-                    with st.chat_message("assistant"):
-                        st.write("### Analysis Results")
-                        st.write("Great news! There are no products out of stock right now.")
-
-                    fig = go.Figure(data=[
-                        go.Pie(
-                            labels=['In Stock', 'Out of Stock'],
-                            values=[in_stock_count, out_of_stock_count],
-                            marker_colors=['#4ECDC4', '#FF6B6B'],
-                            textinfo='label+percent',
-                            hole=0.3
-                        )
-                    ])
-                    fig.update_layout(
-                        title="Stock Status: In Stock vs Out of Stock",
-                        height=500,
-                        width=700,
-                        showlegend=True
-                    )
-                    with st.chat_message("assistant"):
-                        st.plotly_chart(fig)
-
-            elif "last month" in prompt.lower() and "this month" in prompt.lower():
-                current_date = datetime.now()
-                current_month = current_date.month
-                current_year = current_date.year
-                last_month_year = current_year - 1 if current_month == 1 else current_year
-                last_month = 12 if current_month == 1 else current_month - 1
-
-                category = "Electronics" if "electronics" in prompt.lower() else None
-                df_filtered = df[df['category'].str.lower() == category.lower()] if category else df
-
-                this_month_data = df_filtered[
-                    (df_filtered['updated_at'].dt.month == current_month) & 
-                    (df_filtered['updated_at'].dt.year == current_year)
-                ]
-                last_month_data = df_filtered[
-                    (df_filtered['updated_at'].dt.month == last_month) & 
-                    (df_filtered['updated_at'].dt.year == last_month_year)
-                ]
-
-                this_month_count = this_month_data.shape[0]
-                last_month_count = last_month_data.shape[0]
-
-                messages = [
-                    {
-                        "role": "user",
-                        "content": (
-                            f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a friendly and concise response. "
-                            f"The data shows last month had {last_month_count} product updates, and this month has {this_month_count} product updates. "
-                            f"Example: 'Hey! Last month saw {last_month_count} product updates, while this month has {this_month_count} for the {category or 'all'} category!'"
-                        )
-                    }
-                ]
-                response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
-                with st.chat_message("assistant"):
-                    st.write(response.choices[0].message.content)
-
-                with st.chat_message("assistant"):
-                    st.write("### Analysis Results")
-                    st.write(f"This Month: {this_month_count} products")
-                    st.write(f"Last Month: {last_month_count} products")
-
-                fig = go.Figure(data=[
-                    go.Bar(x=['Last Month', 'This Month'], y=[last_month_count, this_month_count], marker_color=['#FF6B6B', '#4ECDC4'])
-                ])
-                fig.update_layout(
-                    title=f"Product Updates Comparison - {category if category else 'All Categories'}",
-                    xaxis_title="Period",
-                    yaxis_title="Number of Products Updated",
-                    height=500,
-                    width=700
-                )
-                with st.chat_message("assistant"):
-                    st.plotly_chart(fig)
-
-            else:
-                messages = [
-                    {
-                        "role": "user",
-                        "content": (
-                            f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a friendly and concise response. "
-                            f"If the question is unclear, suggest options like 'Hey! You can ask me about stock levels (e.g., Which products are out of stock?) "
-                            f"or product updates (e.g., How many products were updated last month?).'"
-                        )
-                    }
-                ]
-                response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
-                with st.chat_message("assistant"):
-                    st.write(response.choices[0].message.content)
+        process_shopify_query(prompt, st.session_state.messages_shopify)
