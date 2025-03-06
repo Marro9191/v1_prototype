@@ -88,10 +88,7 @@ def fetch_shopify_products():
 def parse_months_from_query(question):
     # Map month names to numbers
     month_map = {name.lower(): idx for idx, name in enumerate(calendar.month_name) if name}
-    # Also handle abbreviations (e.g., "Jan")
     month_abbr_map = {name.lower(): idx for idx, name in enumerate(calendar.month_abbr) if name}
-
-    # Combine both maps
     month_map.update(month_abbr_map)
 
     # Find months in the query
@@ -108,14 +105,12 @@ def parse_months_from_query(question):
     years = {}
     for month_name, month_num in months_found:
         month_idx = question_lower.index(month_name)
-        # Look for a 4-digit number after the month name
         remaining_text = question_lower[month_idx + len(month_name):]
         import re
         year_match = re.search(r'\b(\d{4})\b', remaining_text)
         if year_match:
             years[month_num] = int(year_match.group(1))
         else:
-            # Default to the year in the data (assume most recent year in CSV)
             years[month_num] = None
 
     return months_found, years
@@ -141,14 +136,17 @@ if menu == "Insight Conversation":
         df = pd.read_csv(uploaded_file)
         document = df.to_string()
 
-        # Attempt to parse date with flexible formats
-        df['date'] = pd.to_datetime(df['date'], errors='coerce', dayfirst=True)
+        # Parse dates with flexible formats (DD/MM/YY or DD/MM/YYYY)
+        df['date'] = pd.to_datetime(df['date'], format='%d/%m/%y', errors='coerce', dayfirst=True)
         if df['date'].isna().all():
-            st.warning("No valid dates found in the 'date' column. Please use DD/MM/YYYY format.")
-            df['date'] = pd.to_datetime(df['date'], errors='coerce')  # Fallback to default parsing
+            df['date'] = pd.to_datetime(df['date'], format='%d/%m/%Y', errors='coerce', dayfirst=True)
+        if df['date'].isna().all():
+            st.warning("No valid dates found in the 'date' column. Please use DD/MM/YY or DD/MM/YYYY format.")
+            st.stop()
 
-        # Debug: Show first few rows to verify data
-        st.write("Sample data:", df.head())
+        # Debug: Show a representative sample (include both January and February for tootbrush)
+        sample_data = df[df['category'].str.lower() == 'tootbrush'].head(10)
+        st.write("Sample data (filtered for tootbrush):", sample_data)
 
         # Handle dynamic month comparison queries
         months_found, years = parse_months_from_query(question)
@@ -196,7 +194,7 @@ if menu == "Insight Conversation":
                         f"Relevant data for the question (filtered for category '{category}' and months {first_month_name} {first_year}/{second_month_name} {second_year}):\n{openai_data}\n\n"
                         f"---\n\nPlease calculate the total number of reviews for {first_month_name} {first_year} "
                         f"and {second_month_name} {second_year} for the '{category}' category, and compare them. "
-                        f"Sum the 'reviews' column for each month separately."
+                        f"Sum the 'reviews' column for each month separately. Provide the totals and the difference between them."
                     )
                 }
             ]
