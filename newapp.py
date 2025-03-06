@@ -22,8 +22,8 @@ except KeyError:
 def fetch_shopify_products():
     try:
         shopify_domain = st.secrets["shopify"]["domain"]
-        access_token = st.secrets["shopify"]["access_token"]  # Use access token for GraphQL
-        api_version = "2024-10"  # Latest stable version as of March 2025
+        access_token = st.secrets["shopify"]["access_token"]
+        api_version = "2024-10"
 
         url = f"https://{shopify_domain}/admin/api/{api_version}/graphql.json"
         headers = {
@@ -31,7 +31,6 @@ def fetch_shopify_products():
             "X-Shopify-Access-Token": access_token
         }
         
-        # GraphQL query
         query = """
         query {
           products(first: 100) {
@@ -63,7 +62,6 @@ def fetch_shopify_products():
         
         data = response.json()["data"]["products"]["edges"]
         
-        # Flatten the GraphQL response into a DataFrame
         product_data = []
         for edge in data:
             product = edge["node"]
@@ -85,7 +83,7 @@ def fetch_shopify_products():
         st.error(f"Error fetching Shopify data: {str(e)}")
         return pd.DataFrame()
 
-# Insight Conversation (Original Functionality)
+# Insight Conversation
 if menu == "Insight Conversation":
     st.title("📄 Comcore Prototype v1")
     st.write(
@@ -98,16 +96,29 @@ if menu == "Insight Conversation":
     uploaded_file = st.file_uploader("Upload a document (.csv)", type="csv")
     question = st.text_area(
         "Now ask a question about the document!",
-        placeholder="Example: What were total number of reviews last month compared to this month for toothbrush category?",
+        placeholder="Example: What were total number of reviews last month compared to this month for tootbrush category?",
         disabled=not uploaded_file,
     )
 
     if uploaded_file and question:
         df = pd.read_csv(uploaded_file)
         document = df.to_string()
-        df['date'] = pd.to_datetime(df['date'], format='%d/%m/%Y', errors='coerce')
 
-        messages = [{"role": "user", "content": f"Here's a document: {document} \n\n---\n\n {question}"}]
+        # Attempt to parse date with flexible formats
+        df['date'] = pd.to_datetime(df['date'], errors='coerce', dayfirst=True)
+        if df['date'].isna().all():
+            st.warning("No valid dates found in the 'date' column. Please use DD/MM/YYYY format.")
+            df['date'] = pd.to_datetime(df['date'], errors='coerce')  # Fallback to default parsing
+
+        # Debug: Show first few rows to verify data
+        st.write("Sample data:", df.head())
+
+        messages = [
+            {
+                "role": "user",
+                "content": f"Here's a document with columns: {list(df.columns)}. Data sample: {df.head().to_string()} \n\n---\n\n {question}"
+            }
+        ]
         stream = client.chat.completions.create(model="gpt-3.5-turbo", messages=messages, stream=True)
         st.subheader("Response")
         st.write_stream(stream)
@@ -120,8 +131,12 @@ if menu == "Insight Conversation":
             last_month_year = current_year - 1 if current_month == 1 else current_year
             last_month = 12 if current_month == 1 else current_month - 1
 
-            category = "Toothbrush" if "toothbrush" in question.lower() else None
-            df_filtered = df[df['category'].str.lower() == category.lower()] if category else df
+            # Handle both "tootbrush" and "toothbrush" in prompt
+            category = next((cat for cat in ["tootbrush", "toothbrush"] if cat.lower() in question.lower()), None)
+            if category:
+                df_filtered = df[df['category'].str.lower() == category.lower()]
+            else:
+                df_filtered = df
 
             this_month_data = df_filtered[
                 (df_filtered['date'].dt.month == current_month) & 
@@ -191,7 +206,7 @@ if menu == "Insight Conversation":
         else:
             st.warning("The uploaded data is empty.")
 
-# Shopify Catalog Analysis (Updated with GraphQL and Matching Principles)
+# Shopify Catalog Analysis
 elif menu == "Shopify Catalog Analysis":
     st.title("🛒 Shopify Catalog Analysis")
     st.write(
@@ -217,7 +232,6 @@ elif menu == "Shopify Catalog Analysis":
             st.subheader("Response")
             st.write_stream(stream)
 
-            # Custom analysis for product updates comparison
             if "last month" in question.lower() and "this month" in question.lower():
                 current_date = datetime.now()
                 current_month = current_date.month
@@ -256,7 +270,6 @@ elif menu == "Shopify Catalog Analysis":
                 )
                 st.plotly_chart(fig)
 
-            # General visualization options
             st.subheader("Custom Visualization")
             if not df.empty:
                 chart_type = st.selectbox("Chart Type", ["Bar", "Line", "Pie", "Scatter", "Area"])
