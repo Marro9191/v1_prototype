@@ -73,7 +73,7 @@ def fetch_shopify_products():
                     "product_id": product["id"],
                     "title": product["title"],
                     "variant_id": variant["id"],
-                    "sku": variant["sku"],
+                    "sku": str(variant["sku"]),  # Ensure SKU is a string
                     "price": float(variant["price"]),
                     "inventory_quantity": variant["inventoryQuantity"],
                     "created_at": pd.to_datetime(product["createdAt"]),
@@ -378,4 +378,60 @@ elif menu == "Shopify Catalog Analysis":
                 st.write(f"The SKU with the most in-stock items is {max_inventory_sku} with {max_inventory_qty} items.")
 
                 # Generate bar chart of top 5 SKUs by inventory quantity
-                top_s
+                top_skus = df.groupby('sku')['inventory_quantity'].sum().nlargest(5).reset_index()
+                # Debug: Check the top_skus DataFrame
+                st.write("Debug: Top SKUs DataFrame:")
+                st.write(top_skus)
+                # Ensure SKU is treated as a string/category
+                top_skus['sku'] = top_skus['sku'].astype(str)
+                fig = go.Figure(data=[
+                    go.Bar(x=top_skus['sku'], y=top_skus['inventory_quantity'], marker_color='#FF6B6B')
+                ])
+                fig.update_layout(
+                    title="Top 5 SKUs by Inventory Quantity",
+                    xaxis_title="SKU",
+                    yaxis_title="Number of Items in Stock",
+                    height=500,
+                    width=700,
+                    xaxis={'type': 'category'}  # Force x-axis to be categorical
+                )
+                st.plotly_chart(fig)
+
+            # Custom analysis for product updates comparison
+            elif "last month" in question.lower() and "this month" in question.lower():
+                current_date = datetime.now()
+                current_month = current_date.month
+                current_year = current_date.year
+                last_month_year = current_year - 1 if current_month == 1 else current_year
+                last_month = 12 if current_month == 1 else current_month - 1
+
+                category = "Electronics" if "electronics" in question.lower() else None
+                df_filtered = df[df['category'].str.lower() == category.lower()] if category else df
+
+                this_month_data = df_filtered[
+                    (df_filtered['updated_at'].dt.month == current_month) & 
+                    (df_filtered['updated_at'].dt.year == current_year)
+                ]
+                last_month_data = df_filtered[
+                    (df_filtered['updated_at'].dt.month == last_month) & 
+                    (df_filtered['updated_at'].dt.year == last_month_year)
+                ]
+
+                this_month_count = this_month_data.shape[0]
+                last_month_count = last_month_data.shape[0]
+
+                st.subheader("Analysis Results")
+                st.write(f"This Month: {this_month_count} products")
+                st.write(f"Last Month: {last_month_count} products")
+
+                fig = go.Figure(data=[
+                    go.Bar(x=['Last Month', 'This Month'], y=[last_month_count, this_month_count], marker_color=['#FF6B6B', '#4ECDC4'])
+                ])
+                fig.update_layout(
+                    title=f"Product Updates Comparison - {category if category else 'All Categories'}",
+                    xaxis_title="Period",
+                    yaxis_title="Number of Products Updated",
+                    height=500,
+                    width=700
+                )
+                st.plotly_chart(fig)
