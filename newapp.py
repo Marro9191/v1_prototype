@@ -83,6 +83,7 @@ def fetch_shopify_products():
 
 # Reset session state at startup to ensure no residual data
 def reset_session_state():
+    st.write("Debug: Resetting session state...")
     for key in list(st.session_state.keys()):
         if key in ["messages_insight", "df_insight", "upload_message_added", "last_uploaded_file", "messages_shopify"]:
             del st.session_state[key]
@@ -91,6 +92,8 @@ def reset_session_state():
     st.session_state.upload_message_added = {}
     st.session_state.last_uploaded_file = None
     st.session_state.messages_shopify = []
+    # Clear any cached data (optional, for safety)
+    st.cache_data.clear()
 
 # Call reset at the start of the app
 if "session_initialized" not in st.session_state:
@@ -192,6 +195,8 @@ if menu == "Insight Conversation":
                 with st.chat_message("assistant"):
                     st.write("Please upload a CSV file before asking questions about the data.")
                 st.stop()
+
+            # Validate data and preprocess
             df['date'] = pd.to_datetime(df['date'], format='%d/%m/%Y', errors='coerce')
             if df['date'].isna().all():
                 st.warning("No valid dates found in the 'date' column. Please ensure dates are in DD/MM/YYYY format.")
@@ -200,77 +205,19 @@ if menu == "Insight Conversation":
             df['month_year'] = df['date'].dt.strftime('%B %Y')
             df['category'] = df['category'].str.lower().replace("tootbrush", "toothbrush")
 
+            # Dynamic category filtering
             category_filter = None
-            if "toothbrush" in prompt.lower():
-                category_filter = "toothbrush"
-            elif "all categories" in prompt.lower() or "all" in prompt.lower():
+            categories = df['category'].unique()
+            for cat in categories:
+                if cat in prompt.lower():
+                    category_filter = cat
+                    break
+            if not category_filter and ("all categories" in prompt.lower() or "all" in prompt.lower()):
                 category_filter = None
             df_filtered = df if category_filter is None else df[df['category'] == category_filter]
 
             # Process the query
-            if "total number of reviews per month" in prompt.lower():
-                if 'reviews' not in df.columns:
-                    st.warning("The 'reviews' column is not found in the uploaded data.")
-                    st.stop()
-                monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
-                openai_data = monthly_reviews.to_string()
-                messages = [
-                    {
-                        "role": "user",
-                        "content": (
-                            f"Based on the provided data, provide a friendly and concise summary of the total number of reviews per month for all categories. "
-                            f"Use the following grouped data with columns: {list(monthly_reviews.columns)}. "
-                            f"Data:\n{openai_data}\n\n---\n\n {prompt} (e.g., 'Hey! The data shows a peak in January 2025 with 3000 reviews for Toothbrush!')"
-                        )
-                    }
-                ]
-                response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
-                with st.chat_message("assistant"):
-                    st.write(response.choices[0].message.content)
-
-                monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
-                seen = set()
-                unique_results = []
-                for index, row in monthly_reviews.iterrows():
-                    key = (row['month_year'], row['category'])
-                    if key not in seen:
-                        unique_results.append(row)
-                        seen.add(key)
-                monthly_reviews = pd.DataFrame(unique_results)
-
-                with st.chat_message("assistant"):
-                    st.write("### Analysis Results")
-                    st.table(monthly_reviews.style.format({'reviews': '{:,.0f}'}))
-
-                colors = {'toothbrush': '#FF6B6B', 'hygiene': '#4ECDC4'}
-                data_traces = []
-                unique_months = sorted(monthly_reviews['month_year'].unique())
-                for cat in monthly_reviews['category'].unique():
-                    cat_data = monthly_reviews[monthly_reviews['category'] == cat]
-                    data_traces.append(go.Bar(
-                        x=unique_months,
-                        y=[cat_data[cat_data['month_year'] == month]['reviews'].sum() if month in cat_data['month_year'].values else 0 for month in unique_months],
-                        name=cat.capitalize(),
-                        marker_color=colors.get(cat, '#45B7D1')
-                    ))
-                fig = go.Figure(data=data_traces)
-                fig.update_layout(
-                    title=f"Total Reviews Per Month by {'Toothbrush' if category_filter == 'toothbrush' else 'Category'}",
-                    xaxis_title="Month",
-                    yaxis_title="Number of Reviews",
-                    height=500,
-                    width=700,
-                    barmode='group',
-                    showlegend=True
-                )
-                with st.chat_message("assistant"):
-                    st.plotly_chart(fig)
-
-            elif "compared to" in prompt.lower() and "reviews" in prompt.lower():
-                if 'reviews' not in df.columns:
-                    st.warning("The 'reviews' column is not found in the uploaded data.")
-                    st.stop()
+            if "compared to" in prompt.lower() and "reviews" in prompt.lower():
                 months = re.findall(r'\b(January|February|March|April|May|June|July|August|September|October|November|December)\b', prompt, re.IGNORECASE)
                 if len(months) >= 2:
                     month1, month2 = months[0], months[1]
@@ -286,8 +233,8 @@ if menu == "Insight Conversation":
                             "content": (
                                 f"Provide a friendly and concise comparison of the total number of reviews for the {category_filter or 'all'} category "
                                 f"between {month1} 2025 and {month2} 2025. The data shows {month1} 2025 had {month1_reviews} reviews, "
-                                f"and {month2} 2025 had {month2_reviews} reviews. "
-                                f"Example: 'Hey! The total number of reviews for the toothbrush category in {month1} 2025 was {month1_reviews}, compared to {month2_reviews} in {month2} 2025!'"
+                                f"and {month2} 2025 had {month2_reviews} reviews. Only use the provided numbers and do not hallucinate data. "
+                                f"Example: 'Hey! The total number of reviews for the {category_filter or 'all'} category in {month1} 2025 was {month1_reviews}, compared to {month2_reviews} in {month2} 2025!'"
                             )
                         }
                     ]
@@ -314,6 +261,65 @@ if menu == "Insight Conversation":
                     with st.chat_message("assistant"):
                         st.plotly_chart(fig)
 
+            elif "total number of reviews per month" in prompt.lower():
+                if 'reviews' not in df.columns:
+                    st.warning("The 'reviews' column is not found in the uploaded data.")
+                    st.stop()
+                monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
+                openai_data = monthly_reviews.to_string()
+                messages = [
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Based on the provided data, provide a friendly and concise summary of the total number of reviews per month for the {category_filter or 'all'} category. "
+                            f"Use the following grouped data with columns: {list(monthly_reviews.columns)}. "
+                            f"Data:\n{openai_data}\n\n---\n\n {prompt} (e.g., 'Hey! The data shows a peak in January 2025 with 3000 reviews for {category_filter or 'all'}!')"
+                        )
+                    }
+                ]
+                response = client.chat.completions.create(model="gpt-4o", messages=messages)
+                st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
+                with st.chat_message("assistant"):
+                    st.write(response.choices[0].message.content)
+
+                monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
+                seen = set()
+                unique_results = []
+                for index, row in monthly_reviews.iterrows():
+                    key = (row['month_year'], row['category'])
+                    if key not in seen:
+                        unique_results.append(row)
+                        seen.add(key)
+                monthly_reviews = pd.DataFrame(unique_results)
+
+                with st.chat_message("assistant"):
+                    st.write("### Analysis Results")
+                    st.table(monthly_reviews.style.format({'reviews': '{:,.0f}'}))
+
+                colors = {cat: '#FF6B6B' if i == 0 else '#4ECDC4' for i, cat in enumerate(monthly_reviews['category'].unique())}
+                data_traces = []
+                unique_months = sorted(monthly_reviews['month_year'].unique())
+                for cat in monthly_reviews['category'].unique():
+                    cat_data = monthly_reviews[monthly_reviews['category'] == cat]
+                    data_traces.append(go.Bar(
+                        x=unique_months,
+                        y=[cat_data[cat_data['month_year'] == month]['reviews'].sum() if month in cat_data['month_year'].values else 0 for month in unique_months],
+                        name=cat.capitalize(),
+                        marker_color=colors.get(cat, '#45B7D1')
+                    ))
+                fig = go.Figure(data=data_traces)
+                fig.update_layout(
+                    title=f"Total Reviews Per Month by {category_filter.capitalize() if category_filter else 'All Categories'}",
+                    xaxis_title="Month",
+                    yaxis_title="Number of Reviews",
+                    height=500,
+                    width=700,
+                    barmode='group',
+                    showlegend=True
+                )
+                with st.chat_message("assistant"):
+                    st.plotly_chart(fig)
+
             elif "reviews" in prompt.lower() and ("last month" in prompt.lower() or "this month" in prompt.lower()):
                 if 'reviews' not in df.columns:
                     st.warning("The 'reviews' column is not found in the uploaded data.")
@@ -324,8 +330,8 @@ if menu == "Insight Conversation":
                 last_month_year = current_year - 1 if current_month == 1 else current_year
                 last_month = 12 if current_month == 1 else current_month - 1
 
-                category = "toothbrush" if "toothbrush" in prompt.lower() else None
-                df_filtered = df[df['category'].str.lower().str.contains("toot?brush", na=False)] if category else df
+                category = category_filter
+                df_filtered = df[df['category'].str.lower().str.contains(category.lower(), na=False)] if category else df
 
                 this_month_data = df_filtered[
                     (df_filtered['date'].dt.month == current_month) & 
@@ -345,8 +351,8 @@ if menu == "Insight Conversation":
                         "content": (
                             f"Provide a friendly and concise comparison of the total number of reviews for the {category_filter or 'all'} category "
                             f"between last month and this month. The data shows last month had {last_month_reviews} reviews, "
-                            f"and this month had {this_month_reviews} reviews. "
-                            f"Example: 'Hey! Last month had {last_month_reviews} reviews, while this month has {this_month_reviews} for the toothbrush category!'"
+                            f"and this month had {this_month_reviews} reviews. Only use the provided numbers and do not hallucinate data. "
+                            f"Example: 'Hey! Last month had {last_month_reviews} reviews, while this month has {this_month_reviews} for the {category_filter or 'all'} category!'"
                         )
                     }
                 ]
@@ -364,7 +370,7 @@ if menu == "Insight Conversation":
                     go.Bar(x=['Last Month', 'This Month'], y=[last_month_reviews, this_month_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
                 ])
                 fig.update_layout(
-                    title=f"Reviews Comparison - {category if category else 'All Categories'}",
+                    title=f"Reviews Comparison - {category_filter if category_filter else 'All Categories'}",
                     xaxis_title="Period",
                     yaxis_title="Number of Reviews",
                     height=500,
