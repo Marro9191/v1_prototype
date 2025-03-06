@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 from datetime import datetime
 import requests
 import json
+import re
 
 # Add sidebar with menu items
 st.sidebar.title("Navigation")
@@ -140,8 +141,8 @@ if menu == "Insight Conversation":
             last_month_reviews = last_month_data['reviews'].sum() if 'reviews' in last_month_data.columns else 0
 
             st.subheader("Analysis Results")
-            st.write(f"Total Reviews This Month: {this_month_reviews}")
-            st.write(f"Total Reviews Last Month: {last_month_reviews}")
+            st.write(f"This Month: {this_month_reviews} reviews")
+            st.write(f"Last Month: {last_month_reviews} reviews")
 
             fig = go.Figure(data=[
                 go.Bar(x=['Last Month', 'This Month'], y=[last_month_reviews, this_month_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
@@ -155,87 +156,45 @@ if menu == "Insight Conversation":
             )
             st.plotly_chart(fig)
 
-        # Custom analysis for most and least values per month (e.g., SKUs with most/least reviews per month)
-        elif "most" in question.lower() and "least" in question.lower() and "reviews" in question.lower():
-            # Identify the column to analyze (default to 'reviews')
-            value_column = 'reviews'
-            if value_column not in df.columns:
-                st.warning(f"Column '{value_column}' not found in the dataset.")
+        # Custom analysis for most and least values dynamically
+        elif any(word in question.lower() for word in ["most", "least"]) and any(metric in question.lower() for metric in ["reviews", "sales"]):
+            # Dynamically infer entity and metric
+            entity = "SKU" if "item" in question.lower() or "sku" in question.lower() else "product"
+            metric = "reviews" if "reviews" in question.lower() else "sales" if "sales" in question.lower() else None
+            if not metric or metric not in df.columns:
+                st.warning(f"Metric '{metric}' not found in the dataset.")
                 st.stop()
 
-            # Identify the grouping column (default to 'SKU' based on the query context)
-            group_column = 'SKU'
+            group_column = entity.lower() if entity.lower() in df.columns else "SKU"  # Default to SKU if entity not found
             if group_column not in df.columns:
-                st.warning(f"Column '{group_column}' not found in the dataset.")
+                st.warning(f"Grouping column '{group_column}' not found in the dataset.")
                 st.stop()
 
-            # Extract month and year from date for grouping
-            df['month'] = df['date'].dt.month
-            df['year'] = df['date'].dt.year
-            df['month_year'] = df['date'].dt.strftime('%B %Y')  # e.g., "January 2025"
+            # Extract month and year for per-month analysis
+            df['month_year'] = df['date'].dt.strftime('%B %Y')
 
-            # Group by month_year and SKU, sum reviews
-            sku_reviews = df.groupby(['month_year', 'month', 'year', group_column])[value_column].sum().reset_index()
+            # Group by month_year and the entity, sum the metric
+            entity_metrics = df.groupby(['month_year', group_column])[metric].sum().reset_index()
 
             # Check if data is valid
-            if sku_reviews.empty or sku_reviews[value_column].isna().all():
-                st.warning("No valid review data available for SKUs.")
+            if entity_metrics.empty or entity_metrics[metric].isna().all():
+                st.warning(f"No valid {metric} data available for {entity}s.")
                 st.stop()
 
             # Analyze per month
             st.subheader("Analysis Results")
-            monthly_results = {}
-            for month_year in sku_reviews['month_year'].unique():
-                month_data = sku_reviews[sku_reviews['month_year'] == month_year]
+            for month_year in entity_metrics['month_year'].unique():
+                month_data = entity_metrics[entity_metrics['month_year'] == month_year]
 
-                # Find SKU with most reviews for this month
-                max_reviews = month_data[value_column].max()
-                most_skus = month_data[month_data[value_column] == max_reviews][group_column].tolist()
-                if not most_skus:
-                    most_skus = []
-                    max_reviews = 0
+                # Find entity with most metric for this month
+                max_value = month_data[metric].max()
+                most_entities = month_data[month_data[metric] == max_value][group_column].head(1).iloc[0]  # Take first if multiple
 
-                # Find SKU with least reviews for this month (excluding 0)
-                min_reviews = month_data[month_data[value_column] > 0][value_column].min() if (month_data[value_column] > 0).any() else 0
-                least_skus = month_data[month_data[value_column] == min_reviews][group_column].tolist()
-                if not least_skus and min_reviews == 0:
-                    least_skus = []
-                elif not least_skus:
-                    least_skus = []
+                # Find entity with least metric for this month (excluding 0)
+                min_value = month_data[month_data[metric] > 0][metric].min() if (month_data[metric] > 0).any() else 0
+                least_entities = month_data[month_data[metric] == min_value][group_column].head(1).iloc[0] if min_value > 0 else None
 
-                monthly_results[month_year] = {
-                    'most_skus': most_skus,
-                    'max_reviews': max_reviews,
-                    'least_skus': least_skus,
-                    'min_reviews': min_reviews
-                }
-
-                # Display results for this month
-                st.write(f"For {month_year}:")
-                if most_skus:
-                    st.write(f"  SKU(s) with Most Reviews: {', '.join(map(str, most_skus))} (Total: {max_reviews})")
-                else:
-                    st.write(f"  No SKUs found with most reviews.")
-                if least_skus:
-                    st.write(f"  SKU(s) with Least Reviews: {', '.join(map(str, least_skus))} (Total: {min_reviews})")
-                else:
-                    st.write(f"  No SKUs found with least reviews.")
-
-            # Visualization (aggregate across months for simplicity)
-            # Find overall max and min for the chart
-            overall_max = max([result['max_reviews'] for result in monthly_results.values()])
-            overall_min = min([result['min_reviews'] for result in monthly_results.values() if result['min_reviews'] > 0])
-            fig = go.Figure(data=[
-                go.Bar(x=['Most Reviews (Overall)', 'Least Reviews (Overall)'], y=[overall_max, overall_min], marker_color=['#FF6B6B', '#4ECDC4'])
-            ])
-            fig.update_layout(
-                title=f"Review Extremes by SKU (Overall Across Months)",
-                xaxis_title="Category",
-                yaxis_title="Number of Reviews",
-                height=500,
-                width=700
-            )
-            st.plotly_chart(fig)
+                st.write(f"{month_year}: Most {metric}: {most_entities} ({max_value}), Least {metric}: {least_entities if least_entities else 'None'} ({min_value if min_value > 0 else 0})")
 
         # General visualization options
         st.subheader("Custom Visualization")
@@ -327,8 +286,8 @@ elif menu == "Shopify Catalog Analysis":
                 last_month_count = last_month_data.shape[0]
 
                 st.subheader("Analysis Results")
-                st.write(f"Total Products Updated This Month: {this_month_count}")
-                st.write(f"Total Products Updated Last Month: {last_month_count}")
+                st.write(f"This Month: {this_month_count} products")
+                st.write(f"Last Month: {last_month_count} products")
 
                 fig = go.Figure(data=[
                     go.Bar(x=['Last Month', 'This Month'], y=[last_month_count, this_month_count], marker_color=['#FF6B6B', '#4ECDC4'])
