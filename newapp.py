@@ -85,7 +85,7 @@ def fetch_shopify_products():
         st.error(f"Error fetching Shopify data: {str(e)}")
         return pd.DataFrame()
 
-# Default CSV data as a string
+# Default CSV data as a string for Insight Conversation
 default_csv_data = """﻿date,image,SKU,promo,category,product,performance,returns,ratings,reviews,1st Page Rank,Sales
 20/01/2025,https://www.amazon.co.uk/Oral-B-Electric-Toothbrush-Travel-Designed/dp/B0DNG35BVM,1,12345,tootbrush,Jenny’s Electronic Toothbrush ,150,5,5,3000,100,1
 21/01/2025,,2,123123,hygiene,Competitor Toothbrush  ,120,3,5,200,5,2
@@ -136,7 +136,7 @@ if menu == "Insight Conversation":
     else:
         df = st.session_state.df
 
-    # Default query and trigger
+    # Default query (persists across reruns for Insight Conversation)
     if 'question' not in st.session_state:
         st.session_state.question = "What were the total number of reviews per month for all categories?"
     question = st.text_area(
@@ -177,57 +177,7 @@ if menu == "Insight Conversation":
         df_filtered = df if category_filter is None else df[df['category'] == category_filter]
 
         # Single OpenAI response with forced use of grouped data
-        # New condition for specific month comparisons (e.g., "January compared to February")
-        if "compared to" in question.lower() and "reviews" in question.lower():
-            # Extract the two months from the query
-            months = re.findall(r'\b(January|February|March|April|May|June|July|August|September|October|November|December)\b', question, re.IGNORECASE)
-            if len(months) >= 2:
-                month1, month2 = months[0], months[1]
-                # Filter data for the two months
-                month1_data = df_filtered[df_filtered['month_year'].str.contains(month1, case=False, na=False)]
-                month2_data = df_filtered[df_filtered['month_year'].str.contains(month2, case=False, na=False)]
-
-                # Sum reviews for each month
-                month1_reviews = month1_data['reviews'].sum() if 'reviews' in month1_data.columns else 0
-                month2_reviews = month2_data['reviews'].sum() if 'reviews' in month2_data.columns else 0
-
-                # OpenAI response
-                messages = [
-                    {
-                        "role": "user",
-                        "content": (
-                            f"Provide a concise comparison of the total number of reviews for the {category_filter or 'all'} category "
-                            f"between {month1} 2025 and {month2} 2025. The data shows {month1} 2025 had {month1_reviews} reviews, "
-                            f"and {month2} 2025 had {month2_reviews} reviews. "
-                            f"Example: 'The total number of reviews for the toothbrush category in {month1} 2025 was {month1_reviews}, compared to {month2_reviews} in {month2} 2025.'"
-                        )
-                    }
-                ]
-                stream = client.chat.completions.create(model="gpt-4o", messages=messages, stream=True)
-                st.subheader("Response")
-                st.write_stream(stream)
-
-                # Analysis Results
-                st.subheader("Analysis Results")
-                st.write(f"{month1} 2025: {month1_reviews} reviews")
-                st.write(f"{month2} 2025: {month2_reviews} reviews")
-
-                # Generate bar chart
-                fig = go.Figure(data=[
-                    go.Bar(x=[month1 + " 2025", month2 + " 2025"], y=[month1_reviews, month2_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
-                ])
-                fig.update_layout(
-                    title=f"Reviews Comparison - {category_filter.capitalize() if category_filter else 'All Categories'} ({month1} vs {month2})",
-                    xaxis_title="Month",
-                    yaxis_title="Number of Reviews",
-                    height=500,
-                    width=700
-                )
-                st.plotly_chart(fig)
-
-        # Existing condition for total number of reviews per month
-        elif "total number of reviews per month" in question.lower():
-            # Group by month_year and category, sum all reviews
+        if "total number of reviews per month" in question.lower():
             monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
             openai_data = monthly_reviews.to_string()
             messages = [
@@ -240,11 +190,72 @@ if menu == "Insight Conversation":
                     )
                 }
             ]
-            stream = client.chat.completions.create(model="gpt-4o", messages=messages, stream=True)
-            st.subheader("Response")
-            st.write_stream(stream)
+        else:
+            # Handle "most" or "least" queries
+            metric = None
+            for col in df.columns:
+                if any(keyword in col.lower() for keyword in ["sales", "sale"]):
+                    metric = col
+                    break
+            if not metric:
+                metric = "reviews"  # Default to reviews if no sales column found
+                st.warning(f"Metric '{metric}' used as default since 'sales' not found in the dataset.")
+            grouped_data = df_filtered.groupby(['month_year', 'SKU'])[metric].sum().reset_index()
+            openai_data = grouped_data.to_string()
+            messages = [
+                {
+                    "role": "user",
+                    "content": (
+                        f"Here's the grouped data with columns: {list(grouped_data.columns)}. "
+                        f"Data:\n{openai_data}\n\n---\n\n {question} Provide a concise response (e.g., 'The SKU with most {metric} is SKU 1 with 100.'). Use only this data."
+                    )
+                }
+            ]
+        stream = client.chat.completions.create(model="gpt-4o", messages=messages, stream=True)
+        st.subheader("Response")
+        st.write_stream(stream)
 
-            # Analysis Results
+        # Custom analysis for review comparison (last month vs this month)
+        if "reviews" in question.lower() and "last month" in question.lower() and "this month" in question.lower():
+            current_date = datetime.now()
+            current_month = current_date.month
+            current_year = current_date.year
+            last_month_year = current_year - 1 if current_month == 1 else current_year
+            last_month = 12 if current_month == 1 else current_month - 1
+
+            category = "toothbrush" if "toothbrush" in question.lower() else None
+            df_filtered = df[df['category'].str.lower().str.contains("toot?brush", na=False)] if category else df
+
+            this_month_data = df_filtered[
+                (df_filtered['date'].dt.month == current_month) & 
+                (df_filtered['date'].dt.year == current_year)
+            ]
+            last_month_data = df_filtered[
+                (df_filtered['date'].dt.month == last_month) & 
+                (df_filtered['date'].dt.year == last_month_year)
+            ]
+
+            this_month_reviews = this_month_data['reviews'].sum() if 'reviews' in this_month_data.columns else 0
+            last_month_reviews = last_month_data['reviews'].sum() if 'reviews' in last_month_data.columns else 0
+
+            st.subheader("Analysis Results")
+            st.write(f"This Month: {this_month_reviews} reviews")
+            st.write(f"Last Month: {last_month_reviews} reviews")
+
+            fig = go.Figure(data=[
+                go.Bar(x=['Last Month', 'This Month'], y=[last_month_reviews, this_month_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
+            ])
+            fig.update_layout(
+                title=f"Reviews Comparison - {category if category else 'All Categories'}",
+                xaxis_title="Period",
+                yaxis_title="Number of Reviews",
+                height=500,
+                width=700
+            )
+            st.plotly_chart(fig)
+
+        # Custom analysis for total number of reviews per month
+        elif "total number of reviews per month" in question.lower():
             monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
             seen = set()
             unique_results = []
@@ -258,7 +269,6 @@ if menu == "Insight Conversation":
             st.subheader("Analysis Results")
             st.table(monthly_reviews.style.format({'reviews': '{:,.0f}'}))
 
-            # Generate bar chart
             colors = {'toothbrush': '#FF6B6B', 'hygiene': '#4ECDC4'}
             data_traces = []
             unique_months = sorted(monthly_reviews['month_year'].unique())
@@ -282,60 +292,6 @@ if menu == "Insight Conversation":
                 width=700,
                 barmode='group',
                 showlegend=True
-            )
-            st.plotly_chart(fig)
-
-        # Custom analysis for review comparison (last month vs this month)
-        elif "reviews" in question.lower() and "last month" in question.lower() and "this month" in question.lower():
-            current_date = datetime.now()
-            current_month = current_date.month
-            current_year = current_date.year
-            last_month_year = current_year - 1 if current_month == 1 else current_year
-            last_month = 12 if current_month == 1 else current_month - 1
-
-            category = "toothbrush" if "toothbrush" in question.lower() else None
-            df_filtered = df[df['category'].str.lower().str.contains("toot?brush", na=False)] if category else df
-
-            this_month_data = df_filtered[
-                (df_filtered['date'].dt.month == current_month) & 
-                (df_filtered['date'].dt.year == current_year)
-            ]
-            last_month_data = df_filtered[
-                (df_filtered['date'].dt.month == last_month) & 
-                (df_filtered['date'].dt.year == last_month_year)
-            ]
-
-            this_month_reviews = this_month_data['reviews'].sum() if 'reviews' in this_month_data.columns else 0
-            last_month_reviews = last_month_data['reviews'].sum() if 'reviews' in last_month_data.columns else 0
-
-            messages = [
-                {
-                    "role": "user",
-                    "content": (
-                        f"Provide a concise comparison of the total number of reviews for the {category_filter or 'all'} category "
-                        f"between last month and this month. The data shows last month had {last_month_reviews} reviews, "
-                        f"and this month had {this_month_reviews} reviews. "
-                        f"Example: 'The total number of reviews for the toothbrush category last month was {last_month_reviews}, compared to {this_month_reviews} this month.'"
-                    )
-                }
-            ]
-            stream = client.chat.completions.create(model="gpt-4o", messages=messages, stream=True)
-            st.subheader("Response")
-            st.write_stream(stream)
-
-            st.subheader("Analysis Results")
-            st.write(f"This Month: {this_month_reviews} reviews")
-            st.write(f"Last Month: {last_month_reviews} reviews")
-
-            fig = go.Figure(data=[
-                go.Bar(x=['Last Month', 'This Month'], y=[last_month_reviews, this_month_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
-            ])
-            fig.update_layout(
-                title=f"Reviews Comparison - {category if category else 'All Categories'}",
-                xaxis_title="Period",
-                yaxis_title="Number of Reviews",
-                height=500,
-                width=700
             )
             st.plotly_chart(fig)
 
@@ -420,13 +376,20 @@ elif menu == "Shopify Catalog Analysis":
     st.title("🛒 Shopify Catalog Analysis")
     st.write(
         "Ask analytical questions about your Shopify product catalog. "
-        "Data is fetched directly from your Shopify store when you submit a question."
+        "Data is fetched directly from your Shopify store when you submit a question. "
+        "Default query is applied on first load."
     )
 
-    question = st.text_area(
-        "Ask a question about your Shopify catalog!",
-        placeholder="Example: What were total number of products updated last month compared to this month for Electronics category?",
-    )
+    # Default query applied only on first load (no persistence)
+    default_query = "Which SKU has most in stock items?"
+    if 'first_load' not in st.session_state:
+        st.session_state.first_load = True
+        question = default_query
+    else:
+        question = st.text_area(
+            "Ask a question about your Shopify catalog!",
+            placeholder="Example: What were total number of products updated last month compared to this month for Electronics category?",
+        )
 
     if question:
         with st.spinner("Fetching Shopify catalog data via GraphQL..."):
@@ -441,8 +404,31 @@ elif menu == "Shopify Catalog Analysis":
             st.subheader("Response")
             st.write_stream(stream)
 
+            # Custom analysis for inventory quantity (e.g., which SKU has most in stock items)
+            if "sku has most in stock items" in question.lower():
+                # Find the SKU with the maximum inventory_quantity
+                max_inventory_sku = df.loc[df['inventory_quantity'].idxmax(), 'sku']
+                max_inventory_qty = df['inventory_quantity'].max()
+
+                st.subheader("Analysis Results")
+                st.write(f"The SKU with the most in-stock items is {max_inventory_sku} with {max_inventory_qty} items.")
+
+                # Generate bar chart of top 5 SKUs by inventory quantity
+                top_skus = df.groupby('sku')['inventory_quantity'].sum().nlargest(5).reset_index()
+                fig = go.Figure(data=[
+                    go.Bar(x=top_skus['sku'], y=top_skus['inventory_quantity'], marker_color='#FF6B6B')
+                ])
+                fig.update_layout(
+                    title="Top 5 SKUs by Inventory Quantity",
+                    xaxis_title="SKU",
+                    yaxis_title="Number of Items in Stock",
+                    height=500,
+                    width=700
+                )
+                st.plotly_chart(fig)
+
             # Custom analysis for product updates comparison
-            if "last month" in question.lower() and "this month" in question.lower():
+            elif "last month" in question.lower() and "this month" in question.lower():
                 current_date = datetime.now()
                 current_month = current_date.month
                 current_year = current_date.year
