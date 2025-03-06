@@ -187,12 +187,13 @@ if menu == "Insight Conversation":
             for index, row in monthly_reviews.iterrows():
                 st.write(f"{row['month_year']}: {row['reviews']} reviews")
 
-            # Generate automatic bar chart
+            # Generate automatic bar chart with proper category naming
+            chart_title = f"Total Reviews Per Month - {category if category else 'All Categories'} Category"
             fig = go.Figure(data=[
                 go.Bar(x=monthly_reviews['month_year'], y=monthly_reviews['reviews'], marker_color='#FF6B6B')
             ])
             fig.update_layout(
-                title=f"Total Reviews Per Month {f'- {category} Category' if category else ''}",
+                title=chart_title,
                 xaxis_title="Month",
                 yaxis_title="Number of Reviews",
                 height=500,
