@@ -97,7 +97,7 @@ if menu == "Insight Conversation":
     uploaded_file = st.file_uploader("Upload a document (.csv)", type="csv")
     question = st.text_area(
         "Now ask a question about the document!",
-        placeholder="Example: What were total number of reviews last month compared to this month for toothbrush category? Or Provide me item with least reviews and most reviews",
+        placeholder="Example: What were total number of reviews per month for toothbrush category? Or Provide me item with least reviews and most reviews",
         disabled=not uploaded_file,
     )
 
@@ -156,6 +156,48 @@ if menu == "Insight Conversation":
             )
             st.plotly_chart(fig)
 
+        # Custom analysis for total number of reviews per month
+        elif "total number of reviews per month" in question.lower():
+            category = "toothbrush" if "toothbrush" in question.lower() else None
+            df_filtered = df[df['category'].str.lower() == category.lower()] if category else df
+
+            # Group by month and year, sum reviews
+            df['month_year'] = df['date'].dt.strftime('%B %Y')
+            monthly_reviews = df_filtered.groupby('month_year')['reviews'].sum().reset_index()
+
+            # Prepare data for OpenAI
+            openai_data = monthly_reviews.to_string()
+            messages = [
+                {
+                    "role": "user",
+                    "content": (
+                        f"Here's a dataset with columns: {list(df.columns)}. "
+                        f"Grouped data by month and summed reviews:\n{openai_data}\n\n"
+                        f"---\n\nCalculate the total number of reviews per month. {f'Filter by toothbrush category if specified.' if category else ''} The query is: {question}"
+                    )
+                }
+            ]
+            stream = client.chat.completions.create(model="gpt-3.5-turbo", messages=messages, stream=True)
+            st.subheader("Response")
+            st.write_stream(stream)
+
+            st.subheader("Analysis Results")
+            for index, row in monthly_reviews.iterrows():
+                st.write(f"{row['month_year']}: {row['reviews']} reviews")
+
+            # Generate automatic bar chart
+            fig = go.Figure(data=[
+                go.Bar(x=monthly_reviews['month_year'], y=monthly_reviews['reviews'], marker_color='#FF6B6B')
+            ])
+            fig.update_layout(
+                title=f"Total Reviews Per Month {f'- {category} Category' if category else ''}",
+                xaxis_title="Month",
+                yaxis_title="Number of Reviews",
+                height=500,
+                width=700
+            )
+            st.plotly_chart(fig)
+
         # Custom analysis for most and least values dynamically
         elif any(word in question.lower() for word in ["most", "least"]) and any(metric in question.lower() for metric in ["reviews", "sales"]):
             # Dynamically infer entity and metric
@@ -188,7 +230,7 @@ if menu == "Insight Conversation":
 
                 # Find entity with most metric for this month
                 max_value = month_data[metric].max()
-                most_entities = month_data[month_data[metric] == max_value][group_column].head(1).iloc[0]  # Take first if multiple
+                most_entities = month_data[month_data[metric] == max_value][group_column].head(1).iloc[0]
 
                 # Find entity with least metric for this month (excluding 0)
                 min_value = month_data[month_data[metric] > 0][metric].min() if (month_data[metric] > 0).any() else 0
