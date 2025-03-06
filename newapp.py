@@ -403,7 +403,7 @@ elif menu == "Shopify Catalog Analysis":
             st.warning("No data fetched from Shopify. Check your API credentials.")
         else:
             document = df.to_string()
-            messages = [{"role": "user", "content": f"Here's the Shopify catalog data: {document} \n\n---\n\n {question}"}]
+            messages = [{"role": "user", "content": f"Here's the Shopify catalog data: {document} \n\n---\n\n {question} Provide a friendly and concise response. For 'Which SKU has most in stock items?', say something like 'Great news! The SKU with the most items in stock is [SKU] with [quantity] items ready to go!' Avoid technical details unless asked."}]
             stream = client.chat.completions.create(model="gpt-4o", messages=messages, stream=True)
             st.subheader("Response")
             st.write_stream(stream)
