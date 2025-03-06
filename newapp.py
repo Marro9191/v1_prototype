@@ -97,7 +97,7 @@ if menu == "Insight Conversation":
     uploaded_file = st.file_uploader("Upload a document (.csv)", type="csv")
     question = st.text_area(
         "Now ask a question about the document!",
-        placeholder="Example: What were total number of reviews per month for toothbrush category? Or Provide me item with least reviews and most reviews",
+        placeholder="Example: What were total number of reviews per month for toothbrush category? Or Which SKU had most Sales?",
         disabled=not uploaded_file,
     )
 
@@ -131,17 +131,38 @@ if menu == "Insight Conversation":
         df_filtered = df if category_filter is None else df[df['category'] == category_filter]
 
         # Single OpenAI response with forced use of grouped data
-        monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
-        openai_data = monthly_reviews.to_string()
-        messages = [
-            {
-                "role": "user",
-                "content": (
-                    f"Here's the grouped data with columns: {list(monthly_reviews.columns)}. "
-                    f"Data:\n{openai_data}\n\n---\n\n {question} Provide a concise response listing the totals per month and category (e.g., 'January 2025: Toothbrush 3000.'). Use only this data."
-                )
-            }
-        ]
+        if "total number of reviews per month" in question.lower():
+            monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
+            openai_data = monthly_reviews.to_string()
+            messages = [
+                {
+                    "role": "user",
+                    "content": (
+                        f"Here's the grouped data with columns: {list(monthly_reviews.columns)}. "
+                        f"Data:\n{openai_data}\n\n---\n\n {question} Provide a concise response listing the totals per month and category (e.g., 'January 2025: Toothbrush 3000.'). Use only this data."
+                    )
+                }
+            ]
+        else:
+            # Handle "most" or "least" queries
+            metric = None
+            for col in df.columns:
+                if "sales" in col.lower() or "sale" in col.lower():
+                    metric = col
+                    break
+            if not metric:
+                metric = "reviews"  # Default to reviews if no sales column found
+            grouped_data = df_filtered.groupby(['month_year', 'SKU'])[metric].sum().reset_index()
+            openai_data = grouped_data.to_string()
+            messages = [
+                {
+                    "role": "user",
+                    "content": (
+                        f"Here's the grouped data with columns: {list(grouped_data.columns)}. "
+                        f"Data:\n{openai_data}\n\n---\n\n {question} Provide a concise response (e.g., 'The SKU with most {metric} is SKU 1 with 100.'). Use only this data."
+                    )
+                }
+            ]
         stream = client.chat.completions.create(model="gpt-3.5-turbo", messages=messages, stream=True)
         st.subheader("Response")
         st.write_stream(stream)
@@ -235,13 +256,17 @@ if menu == "Insight Conversation":
             st.plotly_chart(fig)
 
         # Custom analysis for most and least values dynamically
-        elif any(word in question.lower() for word in ["most", "least"]) and any(metric in question.lower() for metric in ["reviews", "sales"]):
+        elif any(word in question.lower() for word in ["most", "least"]):
             # Dynamically infer entity and metric
-            entity = "SKU" if "item" in question.lower() or "sku" in question.lower() else "product"
-            metric = "reviews" if "reviews" in question.lower() else "sales" if "sales" in question.lower() else None
-            if not metric or metric not in df.columns:
-                st.warning(f"Metric '{metric}' not found in the dataset.")
-                st.stop()
+            entity = "SKU" if "sku" in question.lower() else "product"
+            metric = None
+            for col in df.columns:
+                if any(keyword in col.lower() for keyword in ["sales", "sale"]):
+                    metric = col
+                    break
+            if not metric:
+                metric = "reviews"  # Default to reviews if no sales column found
+                st.warning(f"Metric '{metric}' used as default since 'sales' not found in the dataset.")
 
             group_column = entity.lower() if entity.lower() in df.columns else "SKU"  # Default to SKU if entity not found
             if group_column not in df.columns:
@@ -252,10 +277,10 @@ if menu == "Insight Conversation":
             df['month_year'] = df['date'].dt.strftime('%B %Y')
 
             # Group by month_year and the entity, sum the metric
-            entity_metrics = df.groupby(['month_year', group_column])['reviews'].sum().reset_index()
+            entity_metrics = df.groupby(['month_year', group_column])[metric].sum().reset_index()
 
             # Check if data is valid
-            if entity_metrics.empty or entity_metrics['reviews'].isna().all():
+            if entity_metrics.empty or entity_metrics[metric].isna().all():
                 st.warning(f"No valid {metric} data available for {entity}s.")
                 st.stop()
 
@@ -265,14 +290,16 @@ if menu == "Insight Conversation":
                 month_data = entity_metrics[entity_metrics['month_year'] == month_year]
 
                 # Find entity with most metric for this month
-                max_value = month_data['reviews'].max()
-                most_entities = month_data[month_data['reviews'] == max_value][group_column].head(1).iloc[0]
+                max_value = month_data[metric].max()
+                most_entities = month_data[month_data[metric] == max_value][group_column].tolist()
+                most_entities_str = ", ".join(most_entities) if len(most_entities) > 1 else most_entities[0]
 
                 # Find entity with least metric for this month (excluding 0)
-                min_value = month_data[month_data['reviews'] > 0]['reviews'].min() if (month_data['reviews'] > 0).any() else 0
-                least_entities = month_data[month_data['reviews'] == min_value][group_column].head(1).iloc[0] if min_value > 0 else None
+                min_value = month_data[month_data[metric] > 0][metric].min() if (month_data[metric] > 0).any() else 0
+                least_entities = month_data[month_data[metric] == min_value][group_column].tolist() if min_value > 0 else [None]
+                least_entities_str = ", ".join(filter(None, least_entities)) if len(least_entities) > 1 else (least_entities[0] if least_entities[0] else "None")
 
-                st.write(f"{month_year}: Most {metric}: {most_entities} ({max_value}), Least {metric}: {least_entities if least_entities else 'None'} ({min_value if min_value > 0 else 0})")
+                st.write(f"{month_year}: Most {metric}: {most_entities_str} ({max_value}), Least {metric}: {least_entities_str} ({min_value if min_value > 0 else 0})")
 
         # General visualization options
         st.subheader("Custom Visualization")
