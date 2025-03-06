@@ -150,24 +150,23 @@ def process_shopify_query(prompt, messages_list):
                 out_of_stock_list = out_of_stock[['title', 'sku']].drop_duplicates().to_dict('records')
                 # Select a few examples for the friendly response
                 sample_products = out_of_stock_list[:3]  # Limit to 3 examples for brevity
-                sample_text = ", ".join([f"{item['title']} (SKU: {item['sku']})" for item in sample_products])
+                sample_text = "\n".join([f"{i+1}. {item['title']} (SKU: {item['sku']})" for i, item in enumerate(sample_products)])
                 if len(out_of_stock_list) > 3:
-                    sample_text += ", and more!"
+                    sample_text += "\n(and more!)"
 
                 messages = [
                     {
                         "role": "user",
                         "content": (
                             f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a super friendly and concise response. "
-                            f"There are {out_of_stock_count} products out of stock. Mention the total count and give a few examples (e.g., {sample_text}), "
-                            f"and encourage restocking with a fun tone like 'Time to restock those shelves! Let me know if you need help!'"
+                            f"There are {out_of_stock_count} products out of stock. Mention the total count and list a few examples (e.g., {sample_text}), "
+                            f"and encourage restocking with a fun tone like 'Looks like it’s time to restock those shelves! Let me know if you need help getting them filled up! 😊'"
                         )
                     }
                 ]
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                messages_list.append({"role": "assistant", "content": response.choices[0].message.content})
-
-                messages_list.append({"role": "assistant", "content": f"### Analysis Results\nTotal number of out-of-stock products: {out_of_stock_count}\n" + "\n".join([f"- Product: {item['title']} (SKU: {item['sku']}) - 0 items in stock" for item in out_of_stock_list[:5]]) + f"\n\nLooks like we have {out_of_stock_count} variants out of stock. Time to restock!"})
+                combined_response = response.choices[0].message.content + "\n\n### Analysis Results\n" + f"Total number of out-of-stock products: {out_of_stock_count}\n" + "\n".join([f"- Product: {item['title']} (SKU: {item['sku']}) - 0 items in stock" for item in out_of_stock_list[:5]])
+                messages_list.append({"role": "assistant", "content": combined_response})
 
                 fig = go.Figure(data=[
                     go.Pie(
@@ -197,9 +196,8 @@ def process_shopify_query(prompt, messages_list):
                     }
                 ]
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                messages_list.append({"role": "assistant", "content": response.choices[0].message.content})
-
-                messages_list.append({"role": "assistant", "content": "### Analysis Results\nGreat news! There are no products out of stock right now."})
+                combined_response = response.choices[0].message.content + "\n\n### Analysis Results\nGreat news! There are no products out of stock right now."
+                messages_list.append({"role": "assistant", "content": combined_response})
 
                 fig = go.Figure(data=[
                     go.Pie(
@@ -344,13 +342,27 @@ if menu == "Insight Conversation":
 
         st.session_state.insight_first_load = False
 
-    # Display chat messages for Insight Conversation
-    for message in st.session_state.messages_insight:
-        with st.chat_message(message["role"]):
-            if isinstance(message["content"], go.Figure):
-                st.plotly_chart(message["content"])
-            else:
-                st.write(message["content"])
+    # Chat container with grey frame
+    with st.container():
+        st.markdown(
+            """
+            <style>
+            .stChatContainer {
+                border: 1px solid #ccc;
+                border-radius: 5px;
+                background-color: #f5f5f5;
+                padding: 10px;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+        for message in st.session_state.messages_insight:
+            with st.chat_message(message["role"]):
+                if isinstance(message["content"], go.Figure):
+                    st.plotly_chart(message["content"])
+                else:
+                    st.write(message["content"])
 
     # File uploader within chat interface
     uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
@@ -579,13 +591,27 @@ elif menu == "Shopify Catalog Analysis":
         process_shopify_query(default_query, st.session_state.messages_shopify)
         st.session_state.shopify_first_load = False
 
-    # Display chat messages for Shopify Catalog Analysis
-    for message in st.session_state.messages_shopify:
-        with st.chat_message(message["role"]):
-            if isinstance(message["content"], go.Figure):
-                st.plotly_chart(message["content"])
-            else:
-                st.write(message["content"])
+    # Chat container with grey frame
+    with st.container():
+        st.markdown(
+            """
+            <style>
+            .stChatContainer {
+                border: 1px solid #ccc;
+                border-radius: 5px;
+                background-color: #f5f5f5;
+                padding: 10px;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+        for message in st.session_state.messages_shopify:
+            with st.chat_message(message["role"]):
+                if isinstance(message["content"], go.Figure):
+                    st.plotly_chart(message["content"])
+                else:
+                    st.write(message["content"])
 
     # Chat input for Shopify Catalog Analysis
     if prompt := st.chat_input("Ask me about your Shopify catalog! (e.g., 'Which products are out of stock, and how many?')"):
