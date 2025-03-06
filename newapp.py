@@ -127,6 +127,8 @@ if "messages_shopify" not in st.session_state:
     st.session_state.messages_shopify = []
 if "df_csv_analysis" not in st.session_state:
     st.session_state.df_csv_analysis = pd.read_csv(io.StringIO(default_csv_data))
+if "last_uploaded_file" not in st.session_state:
+    st.session_state.last_uploaded_file = None
 
 # Display chat interface based on selected tab
 if menu == "CSV Analysis":
@@ -163,15 +165,18 @@ if menu == "CSV Analysis":
 
         # File uploader within sticky container
         uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="csv_analysis_uploader", help="Upload your data file to analyze.")
-        if uploaded_file is not None:
+        if uploaded_file and uploaded_file.name != st.session_state.last_uploaded_file:
             df = pd.read_csv(uploaded_file)
             st.session_state.df_csv_analysis = df
-            st.session_state.messages_csv_analysis.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
-            with st.chat_message("user"):
-                st.write(f"Uploaded CSV file: {uploaded_file.name}")
-            st.session_state.messages_csv_analysis.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
-            with st.chat_message("assistant"):
-                st.write("Great! I’ve loaded your CSV file. Feel free to ask questions about it!")
+            if not any(msg["content"] == f"Uploaded CSV file: {uploaded_file.name}" for msg in st.session_state.messages_csv_analysis):
+                st.session_state.messages_csv_analysis.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
+                with st.chat_message("user"):
+                    st.write(f"Uploaded CSV file: {uploaded_file.name}")
+            if not any(msg["content"] == "Great! I’ve loaded your CSV file. Feel free to ask questions about it!" for msg in st.session_state.messages_csv_analysis):
+                st.session_state.messages_csv_analysis.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
+                with st.chat_message("assistant"):
+                    st.write("Great! I’ve loaded your CSV file. Feel free to ask questions about it!")
+            st.session_state.last_uploaded_file = uploaded_file.name
             st.rerun()
 
         # Chat input within sticky container
