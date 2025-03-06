@@ -83,15 +83,19 @@ def fetch_shopify_products():
 
 # Reset session state at startup to ensure no residual data
 def reset_session_state():
+    for key in list(st.session_state.keys()):
+        if key in ["messages_insight", "df_insight", "upload_message_added", "last_uploaded_file", "messages_shopify"]:
+            del st.session_state[key]
     st.session_state.messages_insight = []
     st.session_state.df_insight = pd.DataFrame()  # No preloaded data
     st.session_state.upload_message_added = {}
     st.session_state.last_uploaded_file = None
+    st.session_state.messages_shopify = []
 
 # Call reset at the start of the app
-if "reset_done" not in st.session_state:
+if "session_initialized" not in st.session_state:
     reset_session_state()
-    st.session_state.reset_done = True
+    st.session_state.session_initialized = True
 
 # Callback function to handle file upload
 def handle_upload():
@@ -103,10 +107,6 @@ def handle_upload():
         st.session_state.last_uploaded_file = uploaded_file.name
         st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
         st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
-
-# Initialize chat history and data for each tab
-if "messages_shopify" not in st.session_state:
-    st.session_state.messages_shopify = []
 
 # Custom CSS to enforce layout
 st.markdown(
@@ -147,10 +147,19 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+# Add sidebar with menu items
+st.sidebar.title("Navigation")
+menu = st.sidebar.radio("Menu", ["Insight Conversation", "Shopify Catalog Analysis"])
+
 # Display chat interface based on selected tab
 if menu == "Insight Conversation":
     st.title("📄 Comcore Prototype v1")
     st.write("Upload a CSV file and ask me about your data! (e.g., 'What were the total number of reviews per month?')")
+
+    # Manual reset button for debugging
+    if st.button("Reset Session"):
+        reset_session_state()
+        st.experimental_rerun()
 
     # Main container for chat messages and responses (above input)
     with st.container():
