@@ -410,13 +410,21 @@ elif menu == "Shopify Catalog Analysis":
 
                 if out_of_stock_count > 0:
                     out_of_stock_list = out_of_stock[['title', 'sku']].drop_duplicates().to_dict('records')
+                    # Select a few examples for the response
+                    sample_products = out_of_stock_list[:3]  # Limit to 3 examples for conciseness
+                    sample_text = "\n".join([f"{i+1}. {item['title']} (SKU: {item['sku']}) - 0 items in stock" for i, item in enumerate(sample_products)])
+                    if len(out_of_stock_list) > 3:
+                        sample_text += "\n(and more!)"
+
                     messages = [
                         {
                             "role": "user",
                             "content": (
-                                f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a friendly and concise response. "
-                                f"List the out-of-stock products with their titles and quantities (0), and say something like 'Hey there! We’ve checked your stock, "
-                                f"and here are the products currently out of stock: [list]. Time to restock!' Avoid technical details unless asked."
+                                f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a single, user-friendly, concise, and precise response. "
+                                f"There are {out_of_stock_count} products out of stock. Include the total count, list up to 3 examples with titles, SKUs, and quantities (0), "
+                                f"and encourage restocking with a fun tone (e.g., 'Time to restock! Let us know if you need help!'). Do not repeat information or split into separate sections. "
+                                f"Example: 'Hey there! We’ve got {out_of_stock_count} products out of stock, including: 1. Short-sleeve Tshirt 1 (SKU: 5) - 0 items in stock, "
+                                f"2. Short-sleeve Tshirt (SKU: None) - 0 items in stock, 3. Short-sleeve Tshirt (SKU: 10) - 0 items in stock (and more!). Time to restock! Let us know if you need help!'"
                             )
                         }
                     ]
@@ -424,12 +432,7 @@ elif menu == "Shopify Catalog Analysis":
                     st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                     with st.chat_message("assistant"):
                         st.write(response.choices[0].message.content)
-
-                    with st.chat_message("assistant"):
-                        st.write("### Analysis Results")
-                        st.write(f"Total number of out-of-stock products: {out_of_stock_count}")
-                        for item in out_of_stock_list:
-                            st.write(f"- Product: {item['title']} (SKU: {item['sku']}) - 0 items in stock")
+                    st.rerun()
 
                     fig = go.Figure(data=[
                         go.Pie(
@@ -446,16 +449,15 @@ elif menu == "Shopify Catalog Analysis":
                         width=700,
                         showlegend=True
                     )
-                    with st.chat_message("assistant"):
-                        st.plotly_chart(fig)
+                    st.session_state.messages_shopify.append({"role": "assistant", "content": fig})
 
                 else:
                     messages = [
                         {
                             "role": "user",
                             "content": (
-                                f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a friendly and concise response. "
-                                f"Say something like 'Hey there! We’ve checked your stock, and great news—there are no products out of stock right now!'"
+                                f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a single, user-friendly, concise, and precise response. "
+                                f"Say something like 'Hey there! Great news—there are no products out of stock right now!'"
                             )
                         }
                     ]
@@ -463,10 +465,7 @@ elif menu == "Shopify Catalog Analysis":
                     st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                     with st.chat_message("assistant"):
                         st.write(response.choices[0].message.content)
-
-                    with st.chat_message("assistant"):
-                        st.write("### Analysis Results")
-                        st.write("Great news! There are no products out of stock right now.")
+                    st.rerun()
 
                     fig = go.Figure(data=[
                         go.Pie(
@@ -483,8 +482,7 @@ elif menu == "Shopify Catalog Analysis":
                         width=700,
                         showlegend=True
                     )
-                    with st.chat_message("assistant"):
-                        st.plotly_chart(fig)
+                    st.session_state.messages_shopify.append({"role": "assistant", "content": fig})
 
             elif "last month" in prompt.lower() and "this month" in prompt.lower():
                 current_date = datetime.now()
@@ -512,8 +510,9 @@ elif menu == "Shopify Catalog Analysis":
                     {
                         "role": "user",
                         "content": (
-                            f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a friendly and concise response. "
+                            f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a single, user-friendly, concise, and precise response. "
                             f"The data shows last month had {last_month_count} product updates, and this month has {this_month_count} product updates. "
+                            f"Include the counts in the response without repeating information. "
                             f"Example: 'Hey! Last month saw {last_month_count} product updates, while this month has {this_month_count} for the {category or 'all'} category!'"
                         )
                     }
@@ -522,11 +521,7 @@ elif menu == "Shopify Catalog Analysis":
                 st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                 with st.chat_message("assistant"):
                     st.write(response.choices[0].message.content)
-
-                with st.chat_message("assistant"):
-                    st.write("### Analysis Results")
-                    st.write(f"This Month: {this_month_count} products")
-                    st.write(f"Last Month: {last_month_count} products")
+                st.rerun()
 
                 fig = go.Figure(data=[
                     go.Bar(x=['Last Month', 'This Month'], y=[last_month_count, this_month_count], marker_color=['#FF6B6B', '#4ECDC4'])
@@ -538,15 +533,14 @@ elif menu == "Shopify Catalog Analysis":
                     height=500,
                     width=700
                 )
-                with st.chat_message("assistant"):
-                    st.plotly_chart(fig)
+                st.session_state.messages_shopify.append({"role": "assistant", "content": fig})
 
             else:
                 messages = [
                     {
                         "role": "user",
                         "content": (
-                            f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a friendly and concise response. "
+                            f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a single, user-friendly, concise, and precise response. "
                             f"If the question is unclear, suggest options like 'Hey! You can ask me about stock levels (e.g., Which products are out of stock?) "
                             f"or product updates (e.g., How many products were updated last month?).'"
                         )
@@ -556,3 +550,4 @@ elif menu == "Shopify Catalog Analysis":
                 st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                 with st.chat_message("assistant"):
                     st.write(response.choices[0].message.content)
+                st.rerun()
