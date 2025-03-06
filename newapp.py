@@ -130,6 +130,30 @@ if "df_insight" not in st.session_state:
 if "last_uploaded_file" not in st.session_state:
     st.session_state.last_uploaded_file = None
 
+# Custom CSS to enforce layout
+st.markdown(
+    """
+    <style>
+    .main-container {
+        padding-bottom: 60px; /* Space for the sticky input container */
+    }
+    .input-container {
+        position: sticky;
+        bottom: 0;
+        background-color: white;
+        padding: 10px;
+        z-index: 100;
+        border-top: 1px solid #ccc;
+        margin-top: -10px; /* Remove default margin to minimize gap */
+    }
+    .stFileUploader {
+        margin-bottom: 0px !important; /* Remove space between uploader and chat input */
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 # Display chat interface based on selected tab
 if menu == "Insight Conversation":
     st.title("📄 Comcore Prototype v1")
@@ -139,15 +163,18 @@ if menu == "Insight Conversation":
     main_container = st.container()
 
     with main_container:
+        st.markdown('<div class="main-container">', unsafe_allow_html=True)
         # Display existing chat messages
         for message in st.session_state.messages_insight:
             with st.chat_message(message["role"]):
                 st.write(message["content"])
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    # Input container at the bottom
+    # Input container at the bottom with CSS styling
     input_container = st.container()
 
     with input_container:
+        st.markdown('<div class="input-container">', unsafe_allow_html=True)
         # File uploader placed just above the chat input
         uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
         if uploaded_file and uploaded_file.name != st.session_state.last_uploaded_file:
