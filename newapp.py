@@ -230,6 +230,51 @@ if menu == "Insight Conversation":
             with st.chat_message("assistant"):
                 st.plotly_chart(fig)
 
+        elif "compared to" in prompt.lower() and "reviews" in prompt.lower():
+            # Extract the two months from the query
+            months = re.findall(r'\b(January|February|March|April|May|June|July|August|September|October|November|December)\b', prompt, re.IGNORECASE)
+            if len(months) >= 2:
+                month1, month2 = months[0], months[1]
+                month1_data = df_filtered[df_filtered['month_year'].str.contains(month1, case=False, na=False)]
+                month2_data = df_filtered[df_filtered['month_year'].str.contains(month2, case=False, na=False)]
+
+                month1_reviews = month1_data['reviews'].sum() if 'reviews' in month1_data.columns else 0
+                month2_reviews = month2_data['reviews'].sum() if 'reviews' in month2_data.columns else 0
+
+                messages = [
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Provide a friendly and concise comparison of the total number of reviews for the {category_filter or 'all'} category "
+                            f"between {month1} 2025 and {month2} 2025. The data shows {month1} 2025 had {month1_reviews} reviews, "
+                            f"and {month2} 2025 had {month2_reviews} reviews. "
+                            f"Example: 'Hey! The total number of reviews for the toothbrush category in {month1} 2025 was {month1_reviews}, compared to {month2_reviews} in {month2} 2025!'"
+                        )
+                    }
+                ]
+                response = client.chat.completions.create(model="gpt-4o", messages=messages)
+                st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
+                with st.chat_message("assistant"):
+                    st.write(response.choices[0].message.content)
+
+                with st.chat_message("assistant"):
+                    st.write("### Analysis Results")
+                    st.write(f"{month1} 2025: {month1_reviews} reviews")
+                    st.write(f"{month2} 2025: {month2_reviews} reviews")
+
+                fig = go.Figure(data=[
+                    go.Bar(x=[month1 + " 2025", month2 + " 2025"], y=[month1_reviews, month2_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
+                ])
+                fig.update_layout(
+                    title=f"Reviews Comparison - {category_filter.capitalize() if category_filter else 'All Categories'} ({month1} vs {month2})",
+                    xaxis_title="Month",
+                    yaxis_title="Number of Reviews",
+                    height=500,
+                    width=700
+                )
+                with st.chat_message("assistant"):
+                    st.plotly_chart(fig)
+
         elif "reviews" in prompt.lower() and ("last month" in prompt.lower() or "this month" in prompt.lower()):
             current_date = datetime.now()
             current_month = current_date.month
