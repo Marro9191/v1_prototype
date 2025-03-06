@@ -22,8 +22,8 @@ except KeyError:
 def fetch_shopify_products():
     try:
         shopify_domain = st.secrets["shopify"]["domain"]
-        access_token = st.secrets["shopify"]["access_token"]  # Use access token for GraphQL
-        api_version = "2024-10"  # Latest stable version as of March 2025
+        access_token = st.secrets["shopify"]["access_token"]
+        api_version = "2024-10"
 
         url = f"https://{shopify_domain}/admin/api/{api_version}/graphql.json"
         headers = {
@@ -31,7 +31,6 @@ def fetch_shopify_products():
             "X-Shopify-Access-Token": access_token
         }
         
-        # GraphQL query
         query = """
         query {
           products(first: 100) {
@@ -63,7 +62,6 @@ def fetch_shopify_products():
         
         data = response.json()["data"]["products"]["edges"]
         
-        # Flatten the GraphQL response into a DataFrame
         product_data = []
         for edge in data:
             product = edge["node"]
@@ -85,7 +83,7 @@ def fetch_shopify_products():
         st.error(f"Error fetching Shopify data: {str(e)}")
         return pd.DataFrame()
 
-# Insight Conversation (Original Functionality)
+# Insight Conversation
 if menu == "Insight Conversation":
     st.title("📄 Comcore Prototype v1")
     st.write(
@@ -98,7 +96,7 @@ if menu == "Insight Conversation":
     uploaded_file = st.file_uploader("Upload a document (.csv)", type="csv")
     question = st.text_area(
         "Now ask a question about the document!",
-        placeholder="Example: What were total number of reviews last month compared to this month for toothbrush category?",
+        placeholder="Example: What were total number of reviews last month compared to this month for toothbrush category? Or Which SKUs had most and least reviews?",
         disabled=not uploaded_file,
     )
 
@@ -107,12 +105,17 @@ if menu == "Insight Conversation":
         document = df.to_string()
         df['date'] = pd.to_datetime(df['date'], format='%d/%m/%Y', errors='coerce')
 
+        # Check for parsing issues
+        if df['date'].isna().all():
+            st.warning("No valid dates found in the 'date' column. Please ensure dates are in DD/MM/YYYY format.")
+            st.stop()
+
         messages = [{"role": "user", "content": f"Here's a document: {document} \n\n---\n\n {question}"}]
         stream = client.chat.completions.create(model="gpt-3.5-turbo", messages=messages, stream=True)
         st.subheader("Response")
         st.write_stream(stream)
 
-        # Custom analysis for review comparison
+        # Custom analysis for review comparison (last month vs this month)
         if "reviews" in question.lower() and "last month" in question.lower() and "this month" in question.lower():
             current_date = datetime.now()
             current_month = current_date.month
@@ -120,7 +123,7 @@ if menu == "Insight Conversation":
             last_month_year = current_year - 1 if current_month == 1 else current_year
             last_month = 12 if current_month == 1 else current_month - 1
 
-            category = "Toothbrush" if "toothbrush" in question.lower() else None
+            category = "toothbrush" if "toothbrush" in question.lower() else None
             df_filtered = df[df['category'].str.lower() == category.lower()] if category else df
 
             this_month_data = df_filtered[
@@ -145,6 +148,64 @@ if menu == "Insight Conversation":
             fig.update_layout(
                 title=f"Reviews Comparison - {category if category else 'All Categories'}",
                 xaxis_title="Period",
+                yaxis_title="Number of Reviews",
+                height=500,
+                width=700
+            )
+            st.plotly_chart(fig)
+
+        # Custom analysis for most and least values (e.g., SKUs with most/least reviews)
+        elif "most" in question.lower() and "least" in question.lower() and "reviews" in question.lower():
+            # Identify the column to analyze (default to 'reviews')
+            value_column = 'reviews'
+            if value_column not in df.columns:
+                st.warning(f"Column '{value_column}' not found in the dataset.")
+                st.stop()
+
+            # Identify the grouping column (default to 'SKU' based on the query context)
+            group_column = 'SKU'
+            if group_column not in df.columns:
+                st.warning(f"Column '{group_column}' not found in the dataset.")
+                st.stop()
+
+            # Group by SKU and sum reviews (assuming reviews are aggregated per SKU)
+            sku_reviews = df.groupby(group_column)[value_column].sum().reset_index()
+
+            # Find SKU with most reviews
+            max_reviews = sku_reviews[value_column].max()
+            most_skus = sku_reviews[sku_reviews[value_column] == max_reviews][group_column].tolist()
+
+            # Find SKU with least reviews (excluding 0 to avoid invalid entries)
+            min_reviews = sku_reviews[sku_reviews[value_column] > 0][value_column].min()
+            least_skus = sku_reviews[sku_reviews[value_column] == min_reviews][group_column].tolist()
+
+            # Prepare data for OpenAI
+            openai_data = sku_reviews.to_string()
+            messages = [
+                {
+                    "role": "user",
+                    "content": (
+                        f"Here's a dataset with columns: {list(df.columns)}. "
+                        f"Grouped data by SKU and summed reviews:\n{openai_data}\n\n"
+                        f"---\n\nBased on the data, identify the SKU(s) with the most reviews and the SKU(s) with the least reviews (excluding 0). "
+                        f"Provide the SKU(s) and their review counts. The query is: {question}"
+                    )
+                }
+            ]
+            stream = client.chat.completions.create(model="gpt-3.5-turbo", messages=messages, stream=True)
+            st.subheader("Response")
+            st.write_stream(stream)
+
+            st.subheader("Analysis Results")
+            st.write(f"SKU(s) with Most Reviews: {', '.join(most_skus)} (Total: {max_reviews})")
+            st.write(f"SKU(s) with Least Reviews: {', '.join(least_skus)} (Total: {min_reviews})")
+
+            fig = go.Figure(data=[
+                go.Bar(x=['Most Reviews', 'Least Reviews'], y=[max_reviews, min_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
+            ])
+            fig.update_layout(
+                title=f"Review Extremes by SKU",
+                xaxis_title="Category",
                 yaxis_title="Number of Reviews",
                 height=500,
                 width=700
@@ -191,7 +252,7 @@ if menu == "Insight Conversation":
         else:
             st.warning("The uploaded data is empty.")
 
-# Shopify Catalog Analysis (Updated with GraphQL and Matching Principles)
+# Shopify Catalog Analysis
 elif menu == "Shopify Catalog Analysis":
     st.title("🛒 Shopify Catalog Analysis")
     st.write(
