@@ -81,10 +81,22 @@ def fetch_shopify_products():
         st.error(f"Error fetching Shopify data: {str(e)}")
         return pd.DataFrame()
 
+# Reset session state at startup to ensure no residual data
+def reset_session_state():
+    st.session_state.messages_insight = []
+    st.session_state.df_insight = pd.DataFrame()  # No preloaded data
+    st.session_state.upload_message_added = {}
+    st.session_state.last_uploaded_file = None
+
+# Call reset at the start of the app
+if "reset_done" not in st.session_state:
+    reset_session_state()
+    st.session_state.reset_done = True
+
 # Callback function to handle file upload
 def handle_upload():
     uploaded_file = st.session_state.uploaded_file
-    if uploaded_file and uploaded_file.name not in st.session_state.get("upload_message_added", {}):
+    if uploaded_file and uploaded_file.name not in st.session_state.upload_message_added:
         df = pd.read_csv(uploaded_file)
         st.session_state.df_insight = df
         st.session_state.upload_message_added[uploaded_file.name] = True
@@ -92,26 +104,16 @@ def handle_upload():
         st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
         st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
 
-# Initialize chat history and data for each tab (no preloaded data)
-if "messages_insight" not in st.session_state:
-    st.session_state.messages_insight = []
+# Initialize chat history and data for each tab
 if "messages_shopify" not in st.session_state:
     st.session_state.messages_shopify = []
-if "df_insight" not in st.session_state:
-    st.session_state.df_insight = pd.DataFrame()  # No preloaded data
-if "uploaded_files" not in st.session_state:
-    st.session_state.uploaded_files = set()  # Track unique file names (optional, can remove if not needed)
-if "last_uploaded_file" not in st.session_state:
-    st.session_state.last_uploaded_file = None  # Track the last uploaded file
-if "upload_message_added" not in st.session_state:
-    st.session_state.upload_message_added = {}  # Track which files have had upload messages
 
 # Custom CSS to enforce layout
 st.markdown(
     """
     <style>
     .main-content {
-        padding-bottom: 160px; /* Increased space for the fixed input container */
+        padding-bottom: 160px; /* Space for the fixed input container */
         z-index: 1;
         min-height: 100vh; /* Ensure content takes full height */
     }
@@ -177,7 +179,9 @@ if menu == "Insight Conversation":
             # Load and process data
             df = st.session_state.df_insight
             if df.empty:
-                st.warning("No data available. Please upload a CSV file first.")
+                st.session_state.messages_insight.append({"role": "assistant", "content": "Please upload a CSV file before asking questions about the data."})
+                with st.chat_message("assistant"):
+                    st.write("Please upload a CSV file before asking questions about the data.")
                 st.stop()
             df['date'] = pd.to_datetime(df['date'], format='%d/%m/%Y', errors='coerce')
             if df['date'].isna().all():
