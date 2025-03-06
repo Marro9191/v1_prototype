@@ -106,10 +106,11 @@ if menu == "Insight Conversation":
         document = df.to_string()
         df['date'] = pd.to_datetime(df['date'], format='%d/%m/%Y', errors='coerce')
 
-        # Check for parsing issues
+        # Check for parsing issues and data integrity
         if df['date'].isna().all():
             st.warning("No valid dates found in the 'date' column. Please ensure dates are in DD/MM/YYYY format.")
             st.stop()
+        st.write(f"Loaded {len(df)} rows from CSV.")  # Debug row count
 
         # Create month_year column before filtering
         df['month_year'] = df['date'].dt.strftime('%B %Y')
@@ -117,8 +118,18 @@ if menu == "Insight Conversation":
         # Normalize category names
         df['category'] = df['category'].str.lower().replace("tootbrush", "toothbrush")
 
-        # Single OpenAI response
-        messages = [{"role": "user", "content": f"Here's a document: {document} \n\n---\n\n {question} Provide a concise response listing the totals per month and category (e.g., 'January 2025: Toothbrush 3000, Hygiene 746.')."}]
+        # Single OpenAI response with forced use of grouped data
+        monthly_reviews = df.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
+        openai_data = monthly_reviews.to_string()
+        messages = [
+            {
+                "role": "user",
+                "content": (
+                    f"Here's the grouped data with columns: {list(monthly_reviews.columns)}. "
+                    f"Data:\n{openai_data}\n\n---\n\n {question} Provide a concise response listing the totals per month and category (e.g., 'January 2025: Toothbrush 3000, Hygiene 746.'). Use only this data."
+                )
+            }
+        ]
         stream = client.chat.completions.create(model="gpt-3.5-turbo", messages=messages, stream=True)
         st.subheader("Response")
         st.write_stream(stream)
@@ -187,7 +198,7 @@ if menu == "Insight Conversation":
             # Generate automatic bar chart with different colors for each category
             colors = {'toothbrush': '#FF6B6B', 'hygiene': '#4ECDC4'}  # Define colors for categories
             data_traces = []
-            unique_months = monthly_reviews['month_year'].unique()
+            unique_months = sorted(monthly_reviews['month_year'].unique())  # Sort months chronologically
 
             for cat in monthly_reviews['category'].unique():
                 cat_data = monthly_reviews[monthly_reviews['category'] == cat]
