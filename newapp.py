@@ -168,16 +168,34 @@ if menu == "Insight Conversation":
                 st.warning(f"Column '{group_column}' not found in the dataset.")
                 st.stop()
 
-            # Group by SKU and sum reviews (assuming reviews are aggregated per SKU)
+            # Group by SKU and sum reviews
             sku_reviews = df.groupby(group_column)[value_column].sum().reset_index()
+
+            # Debug: Show grouped data
+            st.write("Grouped SKU Reviews:", sku_reviews)
+
+            # Check if data is valid
+            if sku_reviews.empty or sku_reviews[value_column].isna().all():
+                st.warning("No valid review data available for SKUs.")
+                st.stop()
 
             # Find SKU with most reviews
             max_reviews = sku_reviews[value_column].max()
             most_skus = sku_reviews[sku_reviews[value_column] == max_reviews][group_column].tolist()
+            if not most_skus:
+                st.warning("No SKUs found with maximum reviews.")
+                most_skus = []
+                max_reviews = 0
 
             # Find SKU with least reviews (excluding 0 to avoid invalid entries)
-            min_reviews = sku_reviews[sku_reviews[value_column] > 0][value_column].min()
+            min_reviews = sku_reviews[sku_reviews[value_column] > 0][value_column].min() if (sku_reviews[value_column] > 0).any() else 0
             least_skus = sku_reviews[sku_reviews[value_column] == min_reviews][group_column].tolist()
+            if not least_skus and min_reviews == 0:
+                st.warning("No SKUs found with least reviews (excluding 0).")
+                least_skus = []
+            elif not least_skus:
+                st.warning("No valid least reviews found.")
+                least_skus = []
 
             # Prepare data for OpenAI
             openai_data = sku_reviews.to_string()
@@ -197,8 +215,14 @@ if menu == "Insight Conversation":
             st.write_stream(stream)
 
             st.subheader("Analysis Results")
-            st.write(f"SKU(s) with Most Reviews: {', '.join(most_skus)} (Total: {max_reviews})")
-            st.write(f"SKU(s) with Least Reviews: {', '.join(least_skus)} (Total: {min_reviews})")
+            if most_skus:
+                st.write(f"SKU(s) with Most Reviews: {', '.join(map(str, most_skus))} (Total: {max_reviews})")
+            else:
+                st.write("No SKUs found with most reviews.")
+            if least_skus:
+                st.write(f"SKU(s) with Least Reviews: {', '.join(map(str, least_skus))} (Total: {min_reviews})")
+            else:
+                st.write("No SKUs found with least reviews.")
 
             fig = go.Figure(data=[
                 go.Bar(x=['Most Reviews', 'Least Reviews'], y=[max_reviews, min_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
