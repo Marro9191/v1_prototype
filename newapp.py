@@ -167,8 +167,8 @@ if menu == "Insight Conversation":
             category = "toothbrush" if "toothbrush" in question.lower() else None
             df_filtered = df[df['category'].str.lower().str.contains("toot?brush", na=False)] if category else df
 
-            # Group by month_year and category, sum reviews
-            monthly_reviews = df_filtered.groupby(['month_year', 'category'])['reviews'].sum().reset_index()
+            # Group by month_year and category, sum reviews (do not deduplicate SKUs)
+            monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
 
             st.subheader("Analysis Results")
             for index, row in monthly_reviews.iterrows():
@@ -219,10 +219,10 @@ if menu == "Insight Conversation":
             df['month_year'] = df['date'].dt.strftime('%B %Y')
 
             # Group by month_year and the entity, sum the metric
-            entity_metrics = df.groupby(['month_year', group_column])[metric].sum().reset_index()
+            entity_metrics = df.groupby(['month_year', group_column])['reviews'].sum().reset_index()
 
             # Check if data is valid
-            if entity_metrics.empty or entity_metrics[metric].isna().all():
+            if entity_metrics.empty or entity_metrics['reviews'].isna().all():
                 st.warning(f"No valid {metric} data available for {entity}s.")
                 st.stop()
 
@@ -232,12 +232,12 @@ if menu == "Insight Conversation":
                 month_data = entity_metrics[entity_metrics['month_year'] == month_year]
 
                 # Find entity with most metric for this month
-                max_value = month_data[metric].max()
-                most_entities = month_data[month_data[metric] == max_value][group_column].head(1).iloc[0]
+                max_value = month_data['reviews'].max()
+                most_entities = month_data[month_data['reviews'] == max_value][group_column].head(1).iloc[0]
 
                 # Find entity with least metric for this month (excluding 0)
-                min_value = month_data[month_data[metric] > 0][metric].min() if (month_data[metric] > 0).any() else 0
-                least_entities = month_data[month_data[metric] == min_value][group_column].head(1).iloc[0] if min_value > 0 else None
+                min_value = month_data[month_data['reviews'] > 0]['reviews'].min() if (month_data['reviews'] > 0).any() else 0
+                least_entities = month_data[month_data['reviews'] == min_value][group_column].head(1).iloc[0] if min_value > 0 else None
 
                 st.write(f"{month_year}: Most {metric}: {most_entities} ({max_value}), Least {metric}: {least_entities if least_entities else 'None'} ({min_value if min_value > 0 else 0})")
 
