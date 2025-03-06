@@ -81,7 +81,18 @@ def fetch_shopify_products():
         st.error(f"Error fetching Shopify data: {str(e)}")
         return pd.DataFrame()
 
-# Default CSV data as a string for Insight Conversation (restored)
+# Callback function to handle file upload
+def handle_upload():
+    uploaded_file = st.session_state.uploaded_file
+    if uploaded_file and uploaded_file.name not in st.session_state.get("uploaded_files", set()):
+        df = pd.read_csv(uploaded_file)
+        st.session_state.df_insight = df
+        st.session_state.uploaded_files.add(uploaded_file.name)
+        st.session_state.last_uploaded_file = uploaded_file.name
+        st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
+        st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
+
+# Default CSV data as a string for Insight Conversation
 default_csv_data = """﻿date,image,SKU,promo,category,product,performance,returns,ratings,reviews,1st Page Rank,Sales
 20/01/2025,https://www.amazon.co.uk/Oral-B-Electric-Toothbrush-Travel-Designed/dp/B0DNG35BVM,1,12345,tootbrush,Jenny’s Electronic Toothbrush ,150,5,5,3000,100,1
 21/01/2025,,2,123123,hygiene,Competitor Toothbrush  ,120,3,5,200,5,2
@@ -126,18 +137,20 @@ if "messages_insight" not in st.session_state:
 if "messages_shopify" not in st.session_state:
     st.session_state.messages_shopify = []
 if "df_insight" not in st.session_state:
-    st.session_state.df_insight = pd.read_csv(io.StringIO(default_csv_data))  # Restore preloaded data
+    st.session_state.df_insight = pd.read_csv(io.StringIO(default_csv_data))  # Preloaded data
 if "uploaded_files" not in st.session_state:
     st.session_state.uploaded_files = set()  # Track unique file names
 if "last_uploaded_file" not in st.session_state:
     st.session_state.last_uploaded_file = None  # Track the last uploaded file
+if "upload_message_added" not in st.session_state:
+    st.session_state.upload_message_added = {}  # Track which files have had upload messages
 
 # Custom CSS to enforce layout
 st.markdown(
     """
     <style>
     .main-content {
-        padding-bottom: 140px; /* Space for the fixed input container */
+        padding-bottom: 150px; /* Increased space for the fixed input container */
         z-index: 1;
         min-height: 100vh; /* Ensure content takes full height */
     }
@@ -148,7 +161,7 @@ st.markdown(
         right: 0 !important;
         background-color: white !important;
         padding: 10px !important;
-        z-index: 1001 !important;
+        z-index: 1002 !important;
         border-top: 1px solid #ccc !important;
         display: flex !important;
         flex-direction: column !important;
@@ -161,6 +174,10 @@ st.markdown(
     .stChatInput {
         margin-top: 0px !important; /* Remove space above chat input */
         padding-top: 0px !important;
+    }
+    /* Ensure main content stays above input wrapper */
+    .stApp {
+        overflow: auto !important;
     }
     </style>
     """,
@@ -185,15 +202,9 @@ if menu == "Insight Conversation":
     with st.container():
         st.markdown('<div class="input-wrapper">', unsafe_allow_html=True)
         # File uploader placed just above the chat input
-        uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
-        if uploaded_file and uploaded_file.name != st.session_state.last_uploaded_file:
-            df = pd.read_csv(uploaded_file)
-            st.session_state.df_insight = df
-            st.session_state.last_uploaded_file = uploaded_file.name
-            if uploaded_file.name not in st.session_state.uploaded_files:
-                st.session_state.uploaded_files.add(uploaded_file.name)
-                st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
-                st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
+        uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", on_change=handle_upload, args=(st.session_state,), help="Upload your data file to analyze.")
+        if uploaded_file and uploaded_file.name not in st.session_state.upload_message_added:
+            st.session_state.upload_message_added[uploaded_file.name] = True
 
         # Chat input for Insight Conversation, directly below the file uploader
         if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
@@ -203,14 +214,11 @@ if menu == "Insight Conversation":
 
             # Load and process data
             df = st.session_state.df_insight
-            if df.empty:
-                st.warning("No data available. Please upload a CSV file first.")
-                st.stop()
             df['date'] = pd.to_datetime(df['date'], format='%d/%m/%Y', errors='coerce')
             if df['date'].isna().all():
                 st.warning("No valid dates found in the 'date' column. Please ensure dates are in DD/MM/YYYY format.")
                 st.stop()
-            st.write(f"Loaded {len(df)} rows from {'uploaded CSV' if uploaded_file else 'default data'}.")  # Debug row count
+            st.write(f"Loaded {len(df)} rows from {'uploaded CSV' if st.session_state.last_uploaded_file else 'default data'}.")  # Debug row count
             df['month_year'] = df['date'].dt.strftime('%B %Y')
             df['category'] = df['category'].str.lower().replace("tootbrush", "toothbrush")
 
