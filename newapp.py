@@ -90,6 +90,8 @@ if "df_insight" not in st.session_state:
     st.session_state.df_insight = pd.DataFrame()  # Empty DataFrame until uploaded
 if "uploaded_files" not in st.session_state:
     st.session_state.uploaded_files = set()  # Track unique file names
+if "has_uploaded" not in st.session_state:
+    st.session_state.has_uploaded = False  # Flag to track initial upload state
 
 # Custom CSS to enforce layout
 st.markdown(
@@ -138,7 +140,7 @@ if menu == "Insight Conversation":
             with st.chat_message(message["role"]):
                 st.write(message["content"])
         # Check if no data is loaded and prompt user
-        if st.session_state.df_insight.empty and not any("Uploaded CSV file" in msg["content"] for msg in st.session_state.messages_insight):
+        if st.session_state.df_insight.empty and not st.session_state.has_uploaded:
             st.write("Please upload a CSV file to start analyzing your data.")
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -153,6 +155,7 @@ if menu == "Insight Conversation":
             st.session_state.uploaded_files.add(uploaded_file.name)
             st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
             st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
+            st.session_state.has_uploaded = True
             # No rerun needed; messages will display on next render
 
         # Chat input for Insight Conversation, directly below the file uploader
