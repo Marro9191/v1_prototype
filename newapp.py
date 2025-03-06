@@ -148,19 +148,20 @@ def process_shopify_query(prompt, messages_list):
 
             if out_of_stock_count > 0:
                 out_of_stock_list = out_of_stock[['title', 'sku']].drop_duplicates().to_dict('records')
-                # Select a few examples for the friendly response
-                sample_products = out_of_stock_list[:3]  # Limit to 3 examples for brevity
+                # Select a few examples for the response
+                sample_products = out_of_stock_list[:5]  # Limit to 5 examples for conciseness
                 sample_text = "\n".join([f"{i+1}. {item['title']} (SKU: {item['sku']})" for i, item in enumerate(sample_products)])
-                if len(out_of_stock_list) > 3:
+                if len(out_of_stock_list) > 5:
                     sample_text += "\n(and more!)"
 
                 messages = [
                     {
                         "role": "user",
                         "content": (
-                            f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a super friendly and concise response. "
-                            f"There are {out_of_stock_count} products out of stock. Mention the total count and list a few examples (e.g., {sample_text}), "
-                            f"followed by a detailed list of up to 5 products. Encourage restocking with a fun tone like 'Looks like it’s time to restock those shelves! Let me know if you need help getting them filled up! 😊'"
+                            f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a user-friendly, specific, and concise response. "
+                            f"There are {out_of_stock_count} products out of stock. Include the total count and list a few examples (e.g., {sample_text}) in a single, cohesive message. "
+                            f"Do not repeat the same information (e.g., do not list the same products twice). Encourage restocking with a fun tone like 'Looks like it’s time to restock those shelves! Let me know if you need help getting them filled up! 😊'. "
+                            f"Example: 'Hey there! We’ve got {out_of_stock_count} products out of stock right now. Here are a few examples:\n{sample_text}\nLooks like it’s time to restock those shelves! Let me know if you need help getting them filled up! 😊'"
                         )
                     }
                 ]
@@ -189,7 +190,7 @@ def process_shopify_query(prompt, messages_list):
                     {
                         "role": "user",
                         "content": (
-                            f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a super friendly and concise response. "
+                            f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a user-friendly, specific, and concise response. "
                             f"Say something like 'Awesome news! All {len(df)} products are fully stocked—great job!'"
                         )
                     }
@@ -240,15 +241,15 @@ def process_shopify_query(prompt, messages_list):
                 {
                     "role": "user",
                     "content": (
-                        f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a friendly and concise response. "
+                        f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a user-friendly, specific, and concise response. "
                         f"The data shows last month had {last_month_count} product updates, and this month has {this_month_count} product updates. "
-                        f"Include the counts in the response. Example: 'Hey! Last month saw {last_month_count} product updates, while this month has {this_month_count} for the {category or 'all'} category! Here's the breakdown:'"
+                        f"Include the counts in the response without repeating the same information. "
+                        f"Example: 'Hey! Last month saw {last_month_count} product updates, while this month has {this_month_count} for the {category or 'all'} category! Here's the breakdown:\n- This Month: {this_month_count} products\n- Last Month: {last_month_count} products'"
                     )
                 }
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
-            combined_response = f"{response.choices[0].message.content}\n\n- This Month: {this_month_count} products\n- Last Month: {last_month_count} products"
-            messages_list.append({"role": "assistant", "content": combined_response})
+            messages_list.append({"role": "assistant", "content": response.choices[0].message.content})
 
             fig = go.Figure(data=[
                 go.Bar(x=['Last Month', 'This Month'], y=[last_month_count, this_month_count], marker_color=['#FF6B6B', '#4ECDC4'])
@@ -267,7 +268,7 @@ def process_shopify_query(prompt, messages_list):
                 {
                     "role": "user",
                     "content": (
-                        f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a friendly and concise response. "
+                        f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a user-friendly, specific, and concise response. "
                         f"If the question is unclear, suggest options like 'Hey! You can ask me about stock levels (e.g., Which products are out of stock?) "
                         f"or product updates (e.g., How many products were updated last month?).'"
                     )
@@ -313,16 +314,15 @@ if menu == "Insight Conversation":
                 {
                     "role": "user",
                     "content": (
-                        f"Provide a friendly and concise comparison of the total number of reviews for the {category_filter or 'all'} category "
+                        f"Provide a user-friendly, specific, and concise comparison of the total number of reviews for the {category_filter or 'all'} category "
                         f"between {month1} 2025 and {month2} 2025. The data shows {month1} 2025 had {month1_reviews} reviews, "
-                        f"and {month2} 2025 had {month2_reviews} reviews. Include the counts in the response. "
-                        f"Example: 'Hey! The total number of reviews for the toothbrush category in {month1} 2025 was {month1_reviews}, compared to {month2_reviews} in {month2} 2025! Here's the breakdown:'"
+                        f"and {month2} 2025 had {month2_reviews} reviews. Include the counts in the response without repeating the same information. "
+                        f"Example: 'Hey! The total number of reviews for the toothbrush category in {month1} 2025 was {month1_reviews}, compared to {month2_reviews} in {month2} 2025! Here's the breakdown:\n- {month1} 2025: {month1_reviews} reviews\n- {month2} 2025: {month2_reviews} reviews'"
                     )
                 }
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
-            combined_response = f"{response.choices[0].message.content}\n\n- {month1} 2025: {month1_reviews} reviews\n- {month2} 2025: {month2_reviews} reviews"
-            st.session_state.messages_insight.append({"role": "assistant", "content": combined_response})
+            st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
 
             fig = go.Figure(data=[
                 go.Bar(x=[month1 + " 2025", month2 + " 2025"], y=[month1_reviews, month2_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
@@ -397,26 +397,15 @@ if menu == "Insight Conversation":
                 {
                     "role": "user",
                     "content": (
-                        f"Based on the provided data, provide a friendly and concise summary of the total number of reviews per month for all categories. "
+                        f"Based on the provided data, provide a user-friendly, specific, and concise summary of the total number of reviews per month for all categories. "
                         f"Use the following grouped data with columns: {list(monthly_reviews.columns)}. "
-                        f"Data:\n{openai_data}\n\n---\n\n {prompt} Include the data in the response. "
-                        f"Example: 'Hey! The data shows a peak in January 2025 with 3000 reviews for Toothbrush! Here’s the full breakdown:'"
+                        f"Data:\n{openai_data}\n\n---\n\n {prompt} Include the data in the response without repeating the same information. "
+                        f"Example: 'Hey! The data shows a peak in January 2025 with 3000 reviews for Toothbrush! Here’s the full breakdown:\n{openai_data}'"
                     )
                 }
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
-            monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
-            seen = set()
-            unique_results = []
-            for index, row in monthly_reviews.iterrows():
-                key = (row['month_year'], row['category'])
-                if key not in seen:
-                    unique_results.append(row)
-                    seen.add(key)
-            monthly_reviews = pd.DataFrame(unique_results)
-
-            combined_response = f"{response.choices[0].message.content}\n\n{monthly_reviews.to_string(index=False)}"
-            st.session_state.messages_insight.append({"role": "assistant", "content": combined_response})
+            st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
 
             colors = {'toothbrush': '#FF6B6B', 'hygiene': '#4ECDC4'}
             data_traces = []
@@ -456,16 +445,15 @@ if menu == "Insight Conversation":
                     {
                         "role": "user",
                         "content": (
-                            f"Provide a friendly and concise comparison of the total number of reviews for the {category_filter or 'all'} category "
+                            f"Provide a user-friendly, specific, and concise comparison of the total number of reviews for the {category_filter or 'all'} category "
                             f"between {month1} 2025 and {month2} 2025. The data shows {month1} 2025 had {month1_reviews} reviews, "
-                            f"and {month2} 2025 had {month2_reviews} reviews. Include the counts in the response. "
-                            f"Example: 'Hey! The total number of reviews for the toothbrush category in {month1} 2025 was {month1_reviews}, compared to {month2_reviews} in {month2} 2025! Here's the breakdown:'"
+                            f"and {month2} 2025 had {month2_reviews} reviews. Include the counts in the response without repeating the same information. "
+                            f"Example: 'Hey! The total number of reviews for the toothbrush category in {month1} 2025 was {month1_reviews}, compared to {month2_reviews} in {month2} 2025! Here's the breakdown:\n- {month1} 2025: {month1_reviews} reviews\n- {month2} 2025: {month2_reviews} reviews'"
                         )
                     }
                 ]
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                combined_response = f"{response.choices[0].message.content}\n\n- {month1} 2025: {month1_reviews} reviews\n- {month2} 2025: {month2_reviews} reviews"
-                st.session_state.messages_insight.append({"role": "assistant", "content": combined_response})
+                st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
 
                 fig = go.Figure(data=[
                     go.Bar(x=[month1 + " 2025", month2 + " 2025"], y=[month1_reviews, month2_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
@@ -505,16 +493,15 @@ if menu == "Insight Conversation":
                 {
                     "role": "user",
                     "content": (
-                        f"Provide a friendly and concise comparison of the total number of reviews for the {category_filter or 'all'} category "
+                        f"Provide a user-friendly, specific, and concise comparison of the total number of reviews for the {category_filter or 'all'} category "
                         f"between last month and this month. The data shows last month had {last_month_reviews} reviews, "
-                        f"and this month had {this_month_reviews} reviews. Include the counts in the response. "
-                        f"Example: 'Hey! Last month had {last_month_reviews} reviews, while this month has {this_month_reviews} for the toothbrush category! Here's the breakdown:'"
+                        f"and this month had {this_month_reviews} reviews. Include the counts in the response without repeating the same information. "
+                        f"Example: 'Hey! Last month had {last_month_reviews} reviews, while this month has {this_month_reviews} for the toothbrush category! Here's the breakdown:\n- This Month: {this_month_reviews} reviews\n- Last Month: {last_month_reviews} reviews'"
                     )
                 }
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
-            combined_response = f"{response.choices[0].message.content}\n\n- This Month: {this_month_reviews} reviews\n- Last Month: {last_month_reviews} reviews"
-            st.session_state.messages_insight.append({"role": "assistant", "content": combined_response})
+            st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
 
             fig = go.Figure(data=[
                 go.Bar(x=['Last Month', 'This Month'], y=[last_month_reviews, this_month_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
@@ -550,7 +537,7 @@ if menu == "Insight Conversation":
                 st.warning(f"No valid {metric} data available for {entity}s.")
                 st.stop()
 
-            result = "Here’s the breakdown of the most and least {metric} by {entity}:\n\n"
+            result = f"Here’s the breakdown of the most and least {metric} by {entity}:\n\n"
             for month_year in entity_metrics['month_year'].unique():
                 month_data = entity_metrics[entity_metrics['month_year'] == month_year]
                 max_value = month_data[metric].max()
@@ -562,13 +549,13 @@ if menu == "Insight Conversation":
                 least_entities_str = ", ".join(filter(None, least_entities)) if len(least_entities) > 1 else (least_entities[0] if least_entities[0] else "None")
 
                 result += f"{month_year}:\n- Most {metric}: {most_entities_str} ({max_value})\n- Least {metric}: {least_entities_str} ({min_value if min_value > 0 else 0})\n\n"
-            st.session_state.messages_insight.append({"role": "assistant", "content": result.format(metric=metric, entity=entity)})
+            st.session_state.messages_insight.append({"role": "assistant", "content": result})
 
         else:
             messages = [
                 {
                     "role": "user",
-                    "content": f"Provide a friendly response. I don’t fully understand your question about the data. Could you please ask about reviews, sales, or specific months? For example, 'What were the total number of reviews per month?' or 'Which SKU had the most sales?' Or upload a CSV file to start!"
+                    "content": f"Provide a user-friendly, specific, and concise response. I don’t fully understand your question about the data. Could you please ask about reviews, sales, or specific months? For example, 'What were the total number of reviews per month?' or 'Which SKU had the most sales?' Or upload a CSV file to start!"
                 }
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
