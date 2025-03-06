@@ -200,6 +200,7 @@ if menu == "Insight Conversation":
             if df['date'].isna().all():
                 st.warning("No valid dates found in the 'date' column. Please ensure dates are in DD/MM/YYYY format.")
                 st.stop()
+            st.write(f"Debug: Loaded DataFrame:\n{df}")  # Debug output of the DataFrame
             st.write(f"Loaded {len(df)} rows from uploaded CSV.")  # Debug row count
             df['month_year'] = df['date'].dt.strftime('%B %Y')
             df['category'] = df['category'].str.lower()
@@ -219,7 +220,32 @@ if menu == "Insight Conversation":
             df_filtered = df if category_filter is None else df[df['category'] == category_filter]
 
             # Process the query
-            if "compared to" in prompt.lower() and "reviews" in prompt.lower():
+            if "total number of reviews" in prompt.lower() and "category" in prompt.lower():
+                if 'reviews' not in df.columns:
+                    st.warning("The 'reviews' column is not found in the uploaded data.")
+                    st.stop()
+                total_reviews = df_filtered['reviews'].sum()
+                st.write(f"Debug: Total reviews for {category_filter or 'all'} category: {total_reviews}")  # Debug output
+                messages = [
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Provide a friendly and concise response about the total number of reviews for the {category_filter or 'all'} category. "
+                            f"The data shows a total of {total_reviews} reviews. Only use the provided number and do not hallucinate data. "
+                            f"Example: 'Hey! The total number of reviews for the {category_filter or 'all'} category is {total_reviews}!'"
+                        )
+                    }
+                ]
+                response = client.chat.completions.create(model="gpt-4o", messages=messages)
+                st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
+                with st.chat_message("assistant"):
+                    st.write(response.choices[0].message.content)
+
+                with st.chat_message("assistant"):
+                    st.write("### Analysis Results")
+                    st.write(f"Total reviews for {category_filter.capitalize() if category_filter else 'All Categories'}: {total_reviews}")
+
+            elif "compared to" in prompt.lower() and "reviews" in prompt.lower():
                 months = re.findall(r'\b(January|February|March|April|May|June|July|August|September|October|November|December)\b', prompt, re.IGNORECASE)
                 if len(months) >= 2:
                     month1, month2 = months[0], months[1]
@@ -424,7 +450,7 @@ if menu == "Insight Conversation":
                 messages = [
                     {
                         "role": "user",
-                        "content": f"Provide a friendly response. I don’t fully understand your question about the data. Could you please ask about reviews, sales, or specific months? For example, 'What were the total number of reviews per month?' or 'Which SKU had the most sales?' Or upload a CSV file to start!"
+                        "content": f"Provide a friendly response. I don’t fully understand your question about the data. Could you please ask about reviews, sales, or specific months? For example, 'What were the total number of reviews per month?' or 'Which SKU had the most sales?'"
                     }
                 ]
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
