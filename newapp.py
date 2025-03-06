@@ -6,6 +6,7 @@ from datetime import datetime
 import requests
 import json
 import calendar
+import io
 
 # Add sidebar with menu items
 st.sidebar.title("Navigation")
@@ -86,22 +87,18 @@ def fetch_shopify_products():
 
 # Function to parse months from the query
 def parse_months_from_query(question):
-    # Map month names to numbers
     month_map = {name.lower(): idx for idx, name in enumerate(calendar.month_name) if name}
     month_abbr_map = {name.lower(): idx for idx, name in enumerate(calendar.month_abbr) if name}
     month_map.update(month_abbr_map)
 
-    # Find months in the query
     question_lower = question.lower()
     months_found = []
     for month_name, month_num in month_map.items():
         if month_name in question_lower:
             months_found.append((month_name, month_num))
 
-    # Sort by position in the query to maintain order (e.g., "January compared to February")
     months_found.sort(key=lambda x: question_lower.index(x[0]))
 
-    # Extract years if provided (e.g., "January 2024")
     years = {}
     for month_name, month_num in months_found:
         month_idx = question_lower.index(month_name)
@@ -133,31 +130,34 @@ if menu == "Insight Conversation":
     )
 
     if uploaded_file and question:
-        df = pd.read_csv(uploaded_file)
+        # Read file and handle UTF-8 BOM if present
+        file_content = uploaded_file.read()
+        decoded_content = file_content.decode('utf-8-sig').encode('utf-8')  # Remove BOM
+        df = pd.read_csv(io.BytesIO(decoded_content))
 
         # Strip whitespace from the 'date' column
         df['date'] = df['date'].str.strip()
 
         # Debug: Show raw date values before parsing
-        st.write("Raw date column values:", df['date'].head(10))
+        st.write("Raw date column values:", df['date'].head(10).tolist())
 
         # Attempt to parse dates with a general approach first
-        df['date'] = pd.to_datetime(df['date'], errors='coerce', dayfirst=True)
+        df['date'] = pd.to_datetime(df['date'], errors='coerce', infer_datetime_format=True)
 
-        # If general parsing fails, try specific formats
+        # Fallback to specific formats if general parsing fails
         if df['date'].isna().all():
             df['date'] = pd.to_datetime(df['date'], format='%d/%m/%Y', errors='coerce')
         if df['date'].isna().all():
             df['date'] = pd.to_datetime(df['date'], format='%d/%m/%y', errors='coerce')
 
-        # Final check: if still all NaT, stop and show error
+        # Final check: if still all NaT, show error with sample
         if df['date'].isna().all():
             st.warning("No valid dates found in the 'date' column. Please ensure dates are in DD/MM/YY or DD/MM/YYYY format.")
-            st.write("Sample of unparseable dates:", df['date'].head())
+            st.write("Sample of unparseable dates:", df['date'].head().tolist())
             st.stop()
 
         # Debug: Show parsed dates
-        st.write("Parsed date column values:", df['date'].head(10))
+        st.write("Parsed date column values:", df['date'].head(10).tolist())
 
         document = df.to_string()
 
