@@ -160,13 +160,12 @@ def process_shopify_query(prompt, messages_list):
                         "content": (
                             f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a super friendly and concise response. "
                             f"There are {out_of_stock_count} products out of stock. Mention the total count and list a few examples (e.g., {sample_text}), "
-                            f"and encourage restocking with a fun tone like 'Looks like it’s time to restock those shelves! Let me know if you need help getting them filled up! 😊'"
+                            f"followed by a detailed list of up to 5 products. Encourage restocking with a fun tone like 'Looks like it’s time to restock those shelves! Let me know if you need help getting them filled up! 😊'"
                         )
                     }
                 ]
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                combined_response = response.choices[0].message.content + "\n\n### Analysis Results\n" + f"Total number of out-of-stock products: {out_of_stock_count}\n" + "\n".join([f"- Product: {item['title']} (SKU: {item['sku']}) - 0 items in stock" for item in out_of_stock_list[:5]])
-                messages_list.append({"role": "assistant", "content": combined_response})
+                messages_list.append({"role": "assistant", "content": response.choices[0].message.content})
 
                 fig = go.Figure(data=[
                     go.Pie(
@@ -196,8 +195,7 @@ def process_shopify_query(prompt, messages_list):
                     }
                 ]
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                combined_response = response.choices[0].message.content + "\n\n### Analysis Results\nGreat news! There are no products out of stock right now."
-                messages_list.append({"role": "assistant", "content": combined_response})
+                messages_list.append({"role": "assistant", "content": response.choices[0].message.content})
 
                 fig = go.Figure(data=[
                     go.Pie(
@@ -244,14 +242,13 @@ def process_shopify_query(prompt, messages_list):
                     "content": (
                         f"Here's the Shopify catalog data: {document} \n\n---\n\n {prompt} Provide a friendly and concise response. "
                         f"The data shows last month had {last_month_count} product updates, and this month has {this_month_count} product updates. "
-                        f"Example: 'Hey! Last month saw {last_month_count} product updates, while this month has {this_month_count} for the {category or 'all'} category!'"
+                        f"Include the counts in the response. Example: 'Hey! Last month saw {last_month_count} product updates, while this month has {this_month_count} for the {category or 'all'} category! Here's the breakdown:'"
                     )
                 }
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
-            messages_list.append({"role": "assistant", "content": response.choices[0].message.content})
-
-            messages_list.append({"role": "assistant", "content": f"### Analysis Results\nThis Month: {this_month_count} products\nLast Month: {last_month_count} products"})
+            combined_response = f"{response.choices[0].message.content}\n\n- This Month: {this_month_count} products\n- Last Month: {last_month_count} products"
+            messages_list.append({"role": "assistant", "content": combined_response})
 
             fig = go.Figure(data=[
                 go.Bar(x=['Last Month', 'This Month'], y=[last_month_count, this_month_count], marker_color=['#FF6B6B', '#4ECDC4'])
@@ -318,15 +315,14 @@ if menu == "Insight Conversation":
                     "content": (
                         f"Provide a friendly and concise comparison of the total number of reviews for the {category_filter or 'all'} category "
                         f"between {month1} 2025 and {month2} 2025. The data shows {month1} 2025 had {month1_reviews} reviews, "
-                        f"and {month2} 2025 had {month2_reviews} reviews. "
-                        f"Example: 'Hey! The total number of reviews for the toothbrush category in {month1} 2025 was {month1_reviews}, compared to {month2_reviews} in {month2} 2025!'"
+                        f"and {month2} 2025 had {month2_reviews} reviews. Include the counts in the response. "
+                        f"Example: 'Hey! The total number of reviews for the toothbrush category in {month1} 2025 was {month1_reviews}, compared to {month2_reviews} in {month2} 2025! Here's the breakdown:'"
                     )
                 }
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
-            st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
-
-            st.session_state.messages_insight.append({"role": "assistant", "content": f"### Analysis Results\n{month1} 2025: {month1_reviews} reviews\n{month2} 2025: {month2_reviews} reviews"})
+            combined_response = f"{response.choices[0].message.content}\n\n- {month1} 2025: {month1_reviews} reviews\n- {month2} 2025: {month2_reviews} reviews"
+            st.session_state.messages_insight.append({"role": "assistant", "content": combined_response})
 
             fig = go.Figure(data=[
                 go.Bar(x=[month1 + " 2025", month2 + " 2025"], y=[month1_reviews, month2_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
@@ -403,13 +399,12 @@ if menu == "Insight Conversation":
                     "content": (
                         f"Based on the provided data, provide a friendly and concise summary of the total number of reviews per month for all categories. "
                         f"Use the following grouped data with columns: {list(monthly_reviews.columns)}. "
-                        f"Data:\n{openai_data}\n\n---\n\n {prompt} (e.g., 'Hey! The data shows a peak in January 2025 with 3000 reviews for Toothbrush!')"
+                        f"Data:\n{openai_data}\n\n---\n\n {prompt} Include the data in the response. "
+                        f"Example: 'Hey! The data shows a peak in January 2025 with 3000 reviews for Toothbrush! Here’s the full breakdown:'"
                     )
                 }
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
-            st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
-
             monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
             seen = set()
             unique_results = []
@@ -420,7 +415,8 @@ if menu == "Insight Conversation":
                     seen.add(key)
             monthly_reviews = pd.DataFrame(unique_results)
 
-            st.session_state.messages_insight.append({"role": "assistant", "content": "### Analysis Results\n" + monthly_reviews.to_string(index=False)})
+            combined_response = f"{response.choices[0].message.content}\n\n{monthly_reviews.to_string(index=False)}"
+            st.session_state.messages_insight.append({"role": "assistant", "content": combined_response})
 
             colors = {'toothbrush': '#FF6B6B', 'hygiene': '#4ECDC4'}
             data_traces = []
@@ -462,15 +458,14 @@ if menu == "Insight Conversation":
                         "content": (
                             f"Provide a friendly and concise comparison of the total number of reviews for the {category_filter or 'all'} category "
                             f"between {month1} 2025 and {month2} 2025. The data shows {month1} 2025 had {month1_reviews} reviews, "
-                            f"and {month2} 2025 had {month2_reviews} reviews. "
-                            f"Example: 'Hey! The total number of reviews for the toothbrush category in {month1} 2025 was {month1_reviews}, compared to {month2_reviews} in {month2} 2025!'"
+                            f"and {month2} 2025 had {month2_reviews} reviews. Include the counts in the response. "
+                            f"Example: 'Hey! The total number of reviews for the toothbrush category in {month1} 2025 was {month1_reviews}, compared to {month2_reviews} in {month2} 2025! Here's the breakdown:'"
                         )
                     }
                 ]
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
-
-                st.session_state.messages_insight.append({"role": "assistant", "content": f"### Analysis Results\n{month1} 2025: {month1_reviews} reviews\n{month2} 2025: {month2_reviews} reviews"})
+                combined_response = f"{response.choices[0].message.content}\n\n- {month1} 2025: {month1_reviews} reviews\n- {month2} 2025: {month2_reviews} reviews"
+                st.session_state.messages_insight.append({"role": "assistant", "content": combined_response})
 
                 fig = go.Figure(data=[
                     go.Bar(x=[month1 + " 2025", month2 + " 2025"], y=[month1_reviews, month2_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
@@ -512,15 +507,14 @@ if menu == "Insight Conversation":
                     "content": (
                         f"Provide a friendly and concise comparison of the total number of reviews for the {category_filter or 'all'} category "
                         f"between last month and this month. The data shows last month had {last_month_reviews} reviews, "
-                        f"and this month had {this_month_reviews} reviews. "
-                        f"Example: 'Hey! Last month had {last_month_reviews} reviews, while this month has {this_month_reviews} for the toothbrush category!'"
+                        f"and this month had {this_month_reviews} reviews. Include the counts in the response. "
+                        f"Example: 'Hey! Last month had {last_month_reviews} reviews, while this month has {this_month_reviews} for the toothbrush category! Here's the breakdown:'"
                     )
                 }
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
-            st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
-
-            st.session_state.messages_insight.append({"role": "assistant", "content": f"### Analysis Results\nThis Month: {this_month_reviews} reviews\nLast Month: {last_month_reviews} reviews"})
+            combined_response = f"{response.choices[0].message.content}\n\n- This Month: {this_month_reviews} reviews\n- Last Month: {last_month_reviews} reviews"
+            st.session_state.messages_insight.append({"role": "assistant", "content": combined_response})
 
             fig = go.Figure(data=[
                 go.Bar(x=['Last Month', 'This Month'], y=[last_month_reviews, this_month_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
@@ -556,7 +550,7 @@ if menu == "Insight Conversation":
                 st.warning(f"No valid {metric} data available for {entity}s.")
                 st.stop()
 
-            result = "### Analysis Results\n"
+            result = "Here’s the breakdown of the most and least {metric} by {entity}:\n\n"
             for month_year in entity_metrics['month_year'].unique():
                 month_data = entity_metrics[entity_metrics['month_year'] == month_year]
                 max_value = month_data[metric].max()
@@ -567,8 +561,8 @@ if menu == "Insight Conversation":
                 least_entities = month_data[month_data[metric] == min_value][group_column].tolist() if min_value > 0 else [None]
                 least_entities_str = ", ".join(filter(None, least_entities)) if len(least_entities) > 1 else (least_entities[0] if least_entities[0] else "None")
 
-                result += f"{month_year}: Most {metric}: {most_entities_str} ({max_value}), Least {metric}: {least_entities_str} ({min_value if min_value > 0 else 0})\n"
-            st.session_state.messages_insight.append({"role": "assistant", "content": result})
+                result += f"{month_year}:\n- Most {metric}: {most_entities_str} ({max_value})\n- Least {metric}: {least_entities_str} ({min_value if min_value > 0 else 0})\n\n"
+            st.session_state.messages_insight.append({"role": "assistant", "content": result.format(metric=metric, entity=entity)})
 
         else:
             messages = [
