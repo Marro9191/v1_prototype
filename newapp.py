@@ -125,7 +125,7 @@ if menu == "Insight Conversation":
     st.title("📄 Comcore Prototype v1")
     st.write(
         "Ask analytical questions about the data. Supported formats: .csv, "
-        "and you can also visualize the data with customizable charts. "
+        "and you can also visualize the data with default charts. "
         "Default data is pre-loaded."
     )
 
@@ -375,58 +375,29 @@ if menu == "Insight Conversation":
 
                 st.write(f"{month_year}: Most {metric}: {most_entities_str} ({max_value}), Least {metric}: {least_entities_str} ({min_value if min_value > 0 else 0})")
 
-        # General visualization options
-        st.subheader("Custom Visualization")
-        if not df.empty:
-            chart_type = st.selectbox("Chart Type", ["Bar", "Line", "Pie", "Scatter", "Area"])
-            x_col = st.selectbox("X-axis", df.columns)
-            numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns
-            
-            if len(numeric_cols) > 0:
-                y_col = st.selectbox("Y-axis", numeric_cols)
-                color_option = st.selectbox("Color by", ["Single Color"] + df.columns.tolist())
-                color = st.color_picker("Pick a color", "#00f900") if color_option == "Single Color" else color_option
-                chart_title = st.text_input("Chart Title", "Data Visualization")
-
-                if st.button("Generate Chart"):
-                    fig = go.Figure()
-                    if chart_type == "Bar":
-                        fig.add_trace(go.Bar(x=df[x_col], y=df[y_col], marker_color=color if color_option == "Single Color" else None))
-                    elif chart_type == "Line":
-                        fig.add_trace(go.Scatter(x=df[x_col], y=df[y_col], mode='lines', line=dict(color=color if color_option == "Single Color" else None)))
-                    elif chart_type == "Pie":
-                        pie_data = df.groupby(x_col)[y_col].sum()
-                        fig.add_trace(go.Pie(labels=pie_data.index, values=pie_data.values))
-                    elif chart_type == "Scatter":
-                        fig.add_trace(go.Scatter(
-                            x=df[x_col], y=df[y_col], mode='markers',
-                            marker=dict(color=df[color] if color_option != "Single Color" else color, size=10)
-                        ))
-                    elif chart_type == "Area":
-                        fig.add_trace(go.Scatter(
-                            x=df[x_col], y=df[y_col], fill='tozeroy',
-                            line=dict(color=color if color_option == "Single Color" else None)
-                        ))
-
-                    fig.update_layout(title=chart_title, xaxis_title=x_col, yaxis_title=y_col, height=500, width=700)
-                    st.plotly_chart(fig)
-            else:
-                st.warning("No numeric columns available for charting.")
-        else:
-            st.warning("The uploaded data is empty.")
-
 # Shopify Catalog Analysis
 elif menu == "Shopify Catalog Analysis":
     st.title("🛒 Shopify Catalog Analysis")
     st.write(
         "Ask analytical questions about your Shopify product catalog. "
-        "Data is fetched directly from your Shopify store when you submit a question."
+        "Data is fetched directly from your Shopify store when you submit a question. "
+        "Default query is applied on first load."
     )
 
-    question = st.text_area(
-        "Ask a question about your Shopify catalog!",
-        placeholder="Example: What were total number of products updated last month compared to this month for Electronics category?",
-    )
+    # Default query applied only on first load, always render text_area
+    if 'first_load' not in st.session_state:
+        st.session_state.first_load = True
+        default_query = "Which products are out of stock, and how many?"
+        question = st.text_area(
+            "Ask a question about your Shopify catalog!",
+            value=default_query,
+            placeholder="Example: What were total number of products updated last month compared to this month for Electronics category?",
+        )
+    else:
+        question = st.text_area(
+            "Ask a question about your Shopify catalog!",
+            placeholder="Example: What were total number of products updated last month compared to this month for Electronics category?",
+        )
 
     if question:
         with st.spinner("Fetching Shopify catalog data via GraphQL..."):
@@ -436,13 +407,29 @@ elif menu == "Shopify Catalog Analysis":
             st.warning("No data fetched from Shopify. Check your API credentials.")
         else:
             document = df.to_string()
-            messages = [{"role": "user", "content": f"Here's the Shopify catalog data: {document} \n\n---\n\n {question}"}]
+            messages = [{"role": "user", "content": f"Here's the Shopify catalog data: {document} \n\n---\n\n {question} Provide a friendly and concise response. For 'Which products are out of stock, and how many?', list the out-of-stock products with their titles and quantities (0), and say something like 'Hey there! We’ve checked your stock, and here are the products currently out of stock: [list]. Time to restock!' Avoid technical details unless asked."}]
             stream = client.chat.completions.create(model="gpt-4o", messages=messages, stream=True)
             st.subheader("Response")
             st.write_stream(stream)
 
+            # Custom analysis for products out of stock
+            if "products are out of stock" in question.lower() and "how many" in question.lower():
+                # Filter products with inventory_quantity = 0
+                out_of_stock = df[df['inventory_quantity'] == 0]
+                out_of_stock_count = len(out_of_stock)
+
+                if out_of_stock_count > 0:
+                    out_of_stock_list = out_of_stock[['title', 'sku']].drop_duplicates().to_dict('records')
+                    st.subheader("Analysis Results")
+                    st.write(f"Total number of out-of-stock products: {out_of_stock_count}")
+                    for item in out_of_stock_list:
+                        st.write(f"- Product: {item['title']} (SKU: {item['sku']}) - 0 items in stock")
+                else:
+                    st.subheader("Analysis Results")
+                    st.write("Great news! There are no products out of stock right now.")
+
             # Custom analysis for product updates comparison
-            if "last month" in question.lower() and "this month" in question.lower():
+            elif "last month" in question.lower() and "this month" in question.lower():
                 current_date = datetime.now()
                 current_month = current_date.month
                 current_year = current_date.year
