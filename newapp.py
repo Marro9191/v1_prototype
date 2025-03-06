@@ -178,7 +178,11 @@ if menu == "Insight Conversation":
 
         # Single OpenAI response with forced use of grouped data
         if "total number of reviews per month" in question.lower():
+            # Group by month_year and category, sum all reviews
             monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
+            # Debug the grouped data
+            st.write("Grouped Data for Reviews (monthly_reviews):")
+            st.write(monthly_reviews)
             openai_data = monthly_reviews.to_string()
             messages = [
                 {
@@ -210,7 +214,7 @@ if menu == "Insight Conversation":
                     )
                 }
             ]
-        stream = client.chat.completions.create(model="gpt-3.5-turbo", messages=messages, stream=True)
+        stream = client.chat.completions.create(model="gpt-4o", messages=messages, stream=True)
         st.subheader("Response")
         st.write_stream(stream)
 
@@ -409,7 +413,7 @@ elif menu == "Shopify Catalog Analysis":
         else:
             document = df.to_string()
             messages = [{"role": "user", "content": f"Here's the Shopify catalog data: {document} \n\n---\n\n {question}"}]
-            stream = client.chat.completions.create(model="gpt-3.5-turbo", messages=messages, stream=True)
+            stream = client.chat.completions.create(model="gpt-4o", messages=messages, stream=True)
             st.subheader("Response")
             st.write_stream(stream)
 
