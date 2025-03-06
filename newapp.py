@@ -188,9 +188,9 @@ if menu == "Insight Conversation":
                 {
                     "role": "user",
                     "content": (
-                        f"Based on the provided data, provide a high-level summary of the total number of reviews per month for all categories. "
+                        f"Based on the provided data, provide a concise summary of the total number of reviews per month for all categories. "
                         f"Use the following grouped data with columns: {list(monthly_reviews.columns)}. "
-                        f"Data:\n{openai_data}\n\n---\n\n {question} Provide a concise narrative summary (e.g., 'The data shows a peak in January 2025 with 3000 reviews for Toothbrush.')."
+                        f"Data:\n{openai_data}\n\n---\n\n {question} Highlight the peak month and overall trend in 1-2 sentences."
                     )
                 }
             ]
@@ -266,7 +266,7 @@ if menu == "Insight Conversation":
             # Group by month_year and category, sum all reviews
             monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
 
-            # Remove duplicates in Analysis Results by using a set of unique combinations
+            # Remove duplicates in Analysis Results by ensuring unique combinations
             seen = set()
             unique_results = []
             for index, row in monthly_reviews.iterrows():
@@ -278,7 +278,7 @@ if menu == "Insight Conversation":
 
             st.subheader("Analysis Results")
             # Display as a table for better readability
-            st.table(monthly_reviews.style.format({'reviews': '{:,.0f}'}))
+            st.table(monthly_reviews.style.format({'reviews': '{:,.0f}'}).set_properties(**{'text-align': 'center'}))
 
             # Generate automatic bar chart with different colors for each category
             colors = {'toothbrush': '#FF6B6B', 'hygiene': '#4ECDC4'}  # Define colors for categories
