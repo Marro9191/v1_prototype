@@ -116,35 +116,53 @@ default_csv_data = """﻿date,image,SKU,promo,category,product,performance,retur
 09/03/2025,,31,445667,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,34,31
 10/03/2025,,32,2234,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,31,32"""
 
-# Initialize chat history
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+# Add sidebar with menu items
+st.sidebar.title("Navigation")
+menu = st.sidebar.radio("Menu", ["Insight Conversation", "Shopify Catalog Analysis"])
 
-# Display chat messages
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.write(message["content"])
+# Initialize chat history and data for each tab
+if "messages_insight" not in st.session_state:
+    st.session_state.messages_insight = []
+if "messages_shopify" not in st.session_state:
+    st.session_state.messages_shopify = []
+if "df_insight" not in st.session_state:
+    st.session_state.df_insight = pd.read_csv(io.StringIO(default_csv_data))
 
-# Chat input
-if prompt := st.chat_input("Ask me anything about your data or Shopify catalog!"):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.write(prompt)
+# Display chat interface based on selected tab
+if menu == "Insight Conversation":
+    st.title("📄 Comcore Prototype v1")
+    st.write("Chat with me about your data! Upload a CSV or ask about reviews, sales, or specific months. Default data is pre-loaded.")
 
-    # Fetch data based on context
-    if any(keyword in prompt.lower() for keyword in ["review", "sales", "month", "toothbrush", "hygiene"]):
-        # Insight Conversation context
-        if "df" not in st.session_state:
-            df = pd.read_csv(io.StringIO(default_csv_data))
-            st.session_state.df = df
-        else:
-            df = st.session_state.df
+    # Display chat messages for Insight Conversation
+    for message in st.session_state.messages_insight:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
 
+    # File uploader within chat interface
+    uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
+    if uploaded_file is not None:
+        df = pd.read_csv(uploaded_file)
+        st.session_state.df_insight = df
+        st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
+        with st.chat_message("user"):
+            st.write(f"Uploaded CSV file: {uploaded_file.name}")
+        st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
+        with st.chat_message("assistant"):
+            st.write("Great! I’ve loaded your CSV file. Feel free to ask questions about it!")
+
+    # Chat input for Insight Conversation
+    if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
+        st.session_state.messages_insight.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.write(prompt)
+
+        # Load and process data
+        df = st.session_state.df_insight
         df['date'] = pd.to_datetime(df['date'], format='%d/%m/%Y', errors='coerce')
         if df['date'].isna().all():
             st.warning("No valid dates found in the 'date' column. Please ensure dates are in DD/MM/YYYY format.")
             st.stop()
-        st.write(f"Loaded {len(df)} rows from CSV.")  # Debug row count
+        st.write(f"Loaded {len(df)} rows from {'uploaded CSV' if 'uploaded_file' in locals() else 'default data'}.")  # Debug row count
         df['month_year'] = df['date'].dt.strftime('%B %Y')
         df['category'] = df['category'].str.lower().replace("tootbrush", "toothbrush")
 
@@ -170,7 +188,7 @@ if prompt := st.chat_input("Ask me anything about your data or Shopify catalog!"
                 }
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
-            st.session_state.messages.append({"role": "assistant", "content": response.choices[0].message.content})
+            st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
             with st.chat_message("assistant"):
                 st.write(response.choices[0].message.content)
 
@@ -212,6 +230,51 @@ if prompt := st.chat_input("Ask me anything about your data or Shopify catalog!"
             with st.chat_message("assistant"):
                 st.plotly_chart(fig)
 
+        elif "compared to" in prompt.lower() and "reviews" in prompt.lower():
+            # Extract the two months from the query
+            months = re.findall(r'\b(January|February|March|April|May|June|July|August|September|October|November|December)\b', prompt, re.IGNORECASE)
+            if len(months) >= 2:
+                month1, month2 = months[0], months[1]
+                month1_data = df_filtered[df_filtered['month_year'].str.contains(month1, case=False, na=False)]
+                month2_data = df_filtered[df_filtered['month_year'].str.contains(month2, case=False, na=False)]
+
+                month1_reviews = month1_data['reviews'].sum() if 'reviews' in month1_data.columns else 0
+                month2_reviews = month2_data['reviews'].sum() if 'reviews' in month2_data.columns else 0
+
+                messages = [
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Provide a friendly and concise comparison of the total number of reviews for the {category_filter or 'all'} category "
+                            f"between {month1} 2025 and {month2} 2025. The data shows {month1} 2025 had {month1_reviews} reviews, "
+                            f"and {month2} 2025 had {month2_reviews} reviews. "
+                            f"Example: 'Hey! The total number of reviews for the toothbrush category in {month1} 2025 was {month1_reviews}, compared to {month2_reviews} in {month2} 2025!'"
+                        )
+                    }
+                ]
+                response = client.chat.completions.create(model="gpt-4o", messages=messages)
+                st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
+                with st.chat_message("assistant"):
+                    st.write(response.choices[0].message.content)
+
+                with st.chat_message("assistant"):
+                    st.write("### Analysis Results")
+                    st.write(f"{month1} 2025: {month1_reviews} reviews")
+                    st.write(f"{month2} 2025: {month2_reviews} reviews")
+
+                fig = go.Figure(data=[
+                    go.Bar(x=[month1 + " 2025", month2 + " 2025"], y=[month1_reviews, month2_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
+                ])
+                fig.update_layout(
+                    title=f"Reviews Comparison - {category_filter.capitalize() if category_filter else 'All Categories'} ({month1} vs {month2})",
+                    xaxis_title="Month",
+                    yaxis_title="Number of Reviews",
+                    height=500,
+                    width=700
+                )
+                with st.chat_message("assistant"):
+                    st.plotly_chart(fig)
+
         elif "reviews" in prompt.lower() and ("last month" in prompt.lower() or "this month" in prompt.lower()):
             current_date = datetime.now()
             current_month = current_date.month
@@ -246,7 +309,7 @@ if prompt := st.chat_input("Ask me anything about your data or Shopify catalog!"
                 }
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
-            st.session_state.messages.append({"role": "assistant", "content": response.choices[0].message.content})
+            st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
             with st.chat_message("assistant"):
                 st.write(response.choices[0].message.content)
 
@@ -308,21 +371,34 @@ if prompt := st.chat_input("Ask me anything about your data or Shopify catalog!"
             messages = [
                 {
                     "role": "user",
-                    "content": f"I don’t fully understand your question about the data. Could you please ask about reviews, sales, or specific months? For example, 'What were the total number of reviews per month?' or 'Which SKU had the most sales?'"
+                    "content": f"Provide a friendly response. I don’t fully understand your question about the data. Could you please ask about reviews, sales, or specific months? For example, 'What were the total number of reviews per month?' or 'Which SKU had the most sales?' Or upload a CSV file to start!"
                 }
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
-            st.session_state.messages.append({"role": "assistant", "content": response.choices[0].message.content})
+            st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
             with st.chat_message("assistant"):
                 st.write(response.choices[0].message.content)
 
-    elif any(keyword in prompt.lower() for keyword in ["shopify", "stock", "product", "electronics"]):
-        # Shopify Catalog Analysis context
+elif menu == "Shopify Catalog Analysis":
+    st.title("🛒 Shopify Catalog Analysis")
+    st.write("Chat with me about your Shopify catalog! Ask about stock levels or product updates.")
+
+    # Display chat messages for Shopify Catalog Analysis
+    for message in st.session_state.messages_shopify:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
+
+    # Chat input for Shopify Catalog Analysis
+    if prompt := st.chat_input("Ask me about your Shopify catalog! (e.g., 'Which products are out of stock, and how many?')"):
+        st.session_state.messages_shopify.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.write(prompt)
+
         with st.spinner("Fetching Shopify catalog data via GraphQL..."):
             df = fetch_shopify_products()
 
         if df.empty:
-            st.session_state.messages.append({"role": "assistant", "content": "Oops! I couldn’t fetch the Shopify data. Please check your API credentials."})
+            st.session_state.messages_shopify.append({"role": "assistant", "content": "Oops! I couldn’t fetch the Shopify data. Please check your API credentials."})
             with st.chat_message("assistant"):
                 st.write("Oops! I couldn’t fetch the Shopify data. Please check your API credentials.")
         else:
@@ -345,7 +421,7 @@ if prompt := st.chat_input("Ask me anything about your data or Shopify catalog!"
                         }
                     ]
                     response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                    st.session_state.messages.append({"role": "assistant", "content": response.choices[0].message.content})
+                    st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                     with st.chat_message("assistant"):
                         st.write(response.choices[0].message.content)
 
@@ -384,7 +460,7 @@ if prompt := st.chat_input("Ask me anything about your data or Shopify catalog!"
                         }
                     ]
                     response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                    st.session_state.messages.append({"role": "assistant", "content": response.choices[0].message.content})
+                    st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                     with st.chat_message("assistant"):
                         st.write(response.choices[0].message.content)
 
@@ -443,7 +519,7 @@ if prompt := st.chat_input("Ask me anything about your data or Shopify catalog!"
                     }
                 ]
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                st.session_state.messages.append({"role": "assistant", "content": response.choices[0].message.content})
+                st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                 with st.chat_message("assistant"):
                     st.write(response.choices[0].message.content)
 
@@ -477,10 +553,6 @@ if prompt := st.chat_input("Ask me anything about your data or Shopify catalog!"
                     }
                 ]
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                st.session_state.messages.append({"role": "assistant", "content": response.choices[0].message.content})
+                st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                 with st.chat_message("assistant"):
                     st.write(response.choices[0].message.content)
-    else:
-        st.session_state.messages.append({"role": "assistant", "content": "Hmm, I’m not sure where to look! Please ask about your data (e.g., reviews or sales) or Shopify catalog (e.g., stock levels)."})
-        with st.chat_message("assistant"):
-            st.write("Hmm, I’m not sure where to look! Please ask about your data (e.g., reviews or sales) or Shopify catalog (e.g., stock levels).")
