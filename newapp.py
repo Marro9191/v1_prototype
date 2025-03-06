@@ -129,25 +129,35 @@ if "df_insight" not in st.session_state:
     st.session_state.df_insight = pd.read_csv(io.StringIO(default_csv_data))
 if "last_uploaded_file" not in st.session_state:
     st.session_state.last_uploaded_file = None
+if "has_uploaded_message" not in st.session_state:
+    st.session_state.has_uploaded_message = False
 
 # Custom CSS to enforce layout
 st.markdown(
     """
     <style>
     .main-container {
-        padding-bottom: 60px; /* Space for the sticky input container */
+        padding-bottom: 120px; /* Space for the sticky input container */
     }
     .input-container {
-        position: sticky;
+        position: fixed;
         bottom: 0;
+        left: 0;
+        right: 0;
         background-color: white;
         padding: 10px;
         z-index: 100;
         border-top: 1px solid #ccc;
-        margin-top: -10px; /* Remove default margin to minimize gap */
+        margin-top: 0;
+        margin-bottom: 0;
     }
     .stFileUploader {
         margin-bottom: 0px !important; /* Remove space between uploader and chat input */
+        padding-bottom: 0px !important;
+    }
+    .stChatInput {
+        margin-top: 0px !important; /* Remove space above chat input */
+        padding-top: 0px !important;
     }
     </style>
     """,
@@ -180,16 +190,14 @@ if menu == "Insight Conversation":
         if uploaded_file and uploaded_file.name != st.session_state.last_uploaded_file:
             df = pd.read_csv(uploaded_file)
             st.session_state.df_insight = df
-            if not any(msg["content"] == f"Uploaded CSV file: {uploaded_file.name}" for msg in st.session_state.messages_insight):
-                st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
-                with st.chat_message("user"):
-                    st.write(f"Uploaded CSV file: {uploaded_file.name}")
-            if not any(msg["content"] == "Great! I’ve loaded your CSV file. Feel free to ask questions about it!" for msg in st.session_state.messages_insight):
-                st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
-                with st.chat_message("assistant"):
-                    st.write("Great! I’ve loaded your CSV file. Feel free to ask questions about it!")
             st.session_state.last_uploaded_file = uploaded_file.name
-            st.rerun()
+            # Only add the upload message if it hasn't been added yet
+            if not st.session_state.has_uploaded_message:
+                st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
+                st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
+                st.session_state.has_uploaded_message = True
+                # Refresh to display messages without triggering duplicate uploads
+                st.rerun()
 
         # Chat input for Insight Conversation, directly below the file uploader
         if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
