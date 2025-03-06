@@ -131,6 +131,8 @@ if "insight_first_load" not in st.session_state:
     st.session_state.insight_first_load = True
 if "shopify_first_load" not in st.session_state:
     st.session_state.shopify_first_load = True
+if "last_prompt" not in st.session_state:
+    st.session_state.last_prompt = None  # Track the last processed prompt
 
 # Function to process Shopify query (to avoid duplication)
 def process_shopify_query(prompt, messages_list):
@@ -360,18 +362,15 @@ if menu == "Insight Conversation":
                 else:
                     st.write(message["content"])
 
-    # File uploader within chat interface
-    uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
-    if uploaded_file is not None:
-        df = pd.read_csv(uploaded_file)
-        st.session_state.df_insight = df
-        st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
-        st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
-
-    # Chat input for Insight Conversation
-    if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
+    # Chat input for Insight Conversation with immediate trigger
+    prompt = st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')")
+    if prompt and prompt != st.session_state.last_prompt:
+        st.session_state.last_prompt = prompt
         st.session_state.messages_insight.append({"role": "user", "content": prompt})
+        st.rerun()  # Force a rerun to process the new prompt immediately
 
+    # Process the prompt if it exists and has changed
+    if prompt:
         # Load and process data
         df = st.session_state.df_insight
         df['date'] = pd.to_datetime(df['date'], format='%d/%m/%Y', errors='coerce')
@@ -594,12 +593,13 @@ elif menu == "Shopify Catalog Analysis":
                 else:
                     st.write(message["content"])
 
-    # Chat input for Shopify Catalog Analysis
-    if prompt := st.chat_input("Ask me about your Shopify catalog! (e.g., 'Which products are out of stock, and how many?')"):
-        # Avoid reprocessing the default query if it matches
-        if prompt == "Which products are out of stock, and how many?" and len(st.session_state.messages_shopify) > 1:
-            st.session_state.messages_shopify.append({"role": "user", "content": prompt})
-            st.session_state.messages_shopify.append({"role": "assistant", "content": "I’ve already answered this query! Please check the chat history above or ask a different question."})
-        else:
-            st.session_state.messages_shopify.append({"role": "user", "content": prompt})
-            process_shopify_query(prompt, st.session_state.messages_shopify)
+    # Chat input for Shopify Catalog Analysis with immediate trigger
+    prompt = st.chat_input("Ask me about your Shopify catalog! (e.g., 'Which products are out of stock, and how many?')")
+    if prompt and prompt != st.session_state.last_prompt:
+        st.session_state.last_prompt = prompt
+        st.session_state.messages_shopify.append({"role": "user", "content": prompt})
+        st.rerun()  # Force a rerun to process the new prompt immediately
+
+    # Process the prompt if it exists and has changed
+    if prompt:
+        process_shopify_query(prompt, st.session_state.messages_shopify)
