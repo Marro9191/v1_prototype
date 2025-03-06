@@ -180,9 +180,9 @@ if menu == "Insight Conversation":
         if "total number of reviews per month" in question.lower():
             # Group by month_year and category, sum all reviews
             monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
-            # Debug the grouped data
-            st.write("Grouped Data for Reviews (monthly_reviews):")
-            st.write(monthly_reviews)
+            # Removed debug output from UI
+            # st.write("Grouped Data for Reviews (monthly_reviews):")
+            # st.write(monthly_reviews)
             openai_data = monthly_reviews.to_string()
             messages = [
                 {
