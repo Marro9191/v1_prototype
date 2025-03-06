@@ -139,8 +139,6 @@ def process_shopify_query(prompt, messages_list):
 
     if df.empty:
         messages_list.append({"role": "assistant", "content": "Oops! I couldn’t fetch the Shopify data. Please check your API credentials."})
-        with st.chat_message("assistant"):
-            st.write("Oops! I couldn’t fetch the Shopify data. Please check your API credentials.")
     else:
         document = df.to_string()
         if "products are out of stock" in prompt.lower() and "how many" in prompt.lower():
@@ -162,14 +160,8 @@ def process_shopify_query(prompt, messages_list):
                 ]
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
                 messages_list.append({"role": "assistant", "content": response.choices[0].message.content})
-                with st.chat_message("assistant"):
-                    st.write(response.choices[0].message.content)
 
-                with st.chat_message("assistant"):
-                    st.write("### Analysis Results")
-                    st.write(f"Total number of out-of-stock products: {out_of_stock_count}")
-                    for item in out_of_stock_list:
-                        st.write(f"- Product: {item['title']} (SKU: {item['sku']}) - 0 items in stock")
+                messages_list.append({"role": "assistant", "content": f"### Analysis Results\nTotal number of out-of-stock products: {out_of_stock_count}\n" + "\n".join([f"- Product: {item['title']} (SKU: {item['sku']}) - 0 items in stock" for item in out_of_stock_list]) + f"\n\nIt looks like there are {out_of_stock_count} variants that are out of stock. Time to restock!"})
 
                 fig = go.Figure(data=[
                     go.Pie(
@@ -186,8 +178,7 @@ def process_shopify_query(prompt, messages_list):
                     width=700,
                     showlegend=True
                 )
-                with st.chat_message("assistant"):
-                    st.plotly_chart(fig)
+                messages_list.append({"role": "assistant", "content": fig})
 
             else:
                 messages = [
@@ -201,12 +192,8 @@ def process_shopify_query(prompt, messages_list):
                 ]
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
                 messages_list.append({"role": "assistant", "content": response.choices[0].message.content})
-                with st.chat_message("assistant"):
-                    st.write(response.choices[0].message.content)
 
-                with st.chat_message("assistant"):
-                    st.write("### Analysis Results")
-                    st.write("Great news! There are no products out of stock right now.")
+                messages_list.append({"role": "assistant", "content": "### Analysis Results\nGreat news! There are no products out of stock right now."})
 
                 fig = go.Figure(data=[
                     go.Pie(
@@ -223,8 +210,7 @@ def process_shopify_query(prompt, messages_list):
                     width=700,
                     showlegend=True
                 )
-                with st.chat_message("assistant"):
-                    st.plotly_chart(fig)
+                messages_list.append({"role": "assistant", "content": fig})
 
         elif "last month" in prompt.lower() and "this month" in prompt.lower():
             current_date = datetime.now()
@@ -260,13 +246,8 @@ def process_shopify_query(prompt, messages_list):
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
             messages_list.append({"role": "assistant", "content": response.choices[0].message.content})
-            with st.chat_message("assistant"):
-                st.write(response.choices[0].message.content)
 
-            with st.chat_message("assistant"):
-                st.write("### Analysis Results")
-                st.write(f"This Month: {this_month_count} products")
-                st.write(f"Last Month: {last_month_count} products")
+            messages_list.append({"role": "assistant", "content": f"### Analysis Results\nThis Month: {this_month_count} products\nLast Month: {last_month_count} products"})
 
             fig = go.Figure(data=[
                 go.Bar(x=['Last Month', 'This Month'], y=[last_month_count, this_month_count], marker_color=['#FF6B6B', '#4ECDC4'])
@@ -278,8 +259,7 @@ def process_shopify_query(prompt, messages_list):
                 height=500,
                 width=700
             )
-            with st.chat_message("assistant"):
-                st.plotly_chart(fig)
+            messages_list.append({"role": "assistant", "content": fig})
 
         else:
             messages = [
@@ -294,8 +274,6 @@ def process_shopify_query(prompt, messages_list):
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
             messages_list.append({"role": "assistant", "content": response.choices[0].message.content})
-            with st.chat_message("assistant"):
-                st.write(response.choices[0].message.content)
 
 # Display chat interface based on selected tab
 if menu == "Insight Conversation":
@@ -306,9 +284,6 @@ if menu == "Insight Conversation":
     if st.session_state.insight_first_load:
         default_query = "What were total number of reviews in January compared to February for toothbrush category?"
         st.session_state.messages_insight.append({"role": "user", "content": default_query})
-        with st.chat_message("user"):
-            st.write(default_query)
-        st.session_state.insight_first_load = False
 
         # Load and process default data
         df = st.session_state.df_insight
@@ -346,13 +321,8 @@ if menu == "Insight Conversation":
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
             st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
-            with st.chat_message("assistant"):
-                st.write(response.choices[0].message.content)
 
-            with st.chat_message("assistant"):
-                st.write("### Analysis Results")
-                st.write(f"{month1} 2025: {month1_reviews} reviews")
-                st.write(f"{month2} 2025: {month2_reviews} reviews")
+            st.session_state.messages_insight.append({"role": "assistant", "content": f"### Analysis Results\n{month1} 2025: {month1_reviews} reviews\n{month2} 2025: {month2_reviews} reviews"})
 
             fig = go.Figure(data=[
                 go.Bar(x=[month1 + " 2025", month2 + " 2025"], y=[month1_reviews, month2_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
@@ -364,13 +334,17 @@ if menu == "Insight Conversation":
                 height=500,
                 width=700
             )
-            with st.chat_message("assistant"):
-                st.plotly_chart(fig)
+            st.session_state.messages_insight.append({"role": "assistant", "content": fig})
 
-    # Display chat messages for Insight Conversation (after default query)
+        st.session_state.insight_first_load = False
+
+    # Display chat messages for Insight Conversation
     for message in st.session_state.messages_insight:
         with st.chat_message(message["role"]):
-            st.write(message["content"])
+            if isinstance(message["content"], go.Figure):
+                st.plotly_chart(message["content"])
+            else:
+                st.write(message["content"])
 
     # File uploader within chat interface
     uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
@@ -378,17 +352,11 @@ if menu == "Insight Conversation":
         df = pd.read_csv(uploaded_file)
         st.session_state.df_insight = df
         st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
-        with st.chat_message("user"):
-            st.write(f"Uploaded CSV file: {uploaded_file.name}")
         st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
-        with st.chat_message("assistant"):
-            st.write("Great! I’ve loaded your CSV file. Feel free to ask questions about it!")
 
     # Chat input for Insight Conversation
     if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
         st.session_state.messages_insight.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.write(prompt)
 
         # Load and process data
         df = st.session_state.df_insight
@@ -423,8 +391,6 @@ if menu == "Insight Conversation":
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
             st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
-            with st.chat_message("assistant"):
-                st.write(response.choices[0].message.content)
 
             monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
             seen = set()
@@ -436,9 +402,7 @@ if menu == "Insight Conversation":
                     seen.add(key)
             monthly_reviews = pd.DataFrame(unique_results)
 
-            with st.chat_message("assistant"):
-                st.write("### Analysis Results")
-                st.table(monthly_reviews.style.format({'reviews': '{:,.0f}'}))
+            st.session_state.messages_insight.append({"role": "assistant", "content": "### Analysis Results\n" + monthly_reviews.to_string(index=False)})
 
             colors = {'toothbrush': '#FF6B6B', 'hygiene': '#4ECDC4'}
             data_traces = []
@@ -461,8 +425,7 @@ if menu == "Insight Conversation":
                 barmode='group',
                 showlegend=True
             )
-            with st.chat_message("assistant"):
-                st.plotly_chart(fig)
+            st.session_state.messages_insight.append({"role": "assistant", "content": fig})
 
         elif "compared to" in prompt.lower() and "reviews" in prompt.lower():
             # Extract the two months from the query
@@ -488,13 +451,8 @@ if menu == "Insight Conversation":
                 ]
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
                 st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
-                with st.chat_message("assistant"):
-                    st.write(response.choices[0].message.content)
 
-                with st.chat_message("assistant"):
-                    st.write("### Analysis Results")
-                    st.write(f"{month1} 2025: {month1_reviews} reviews")
-                    st.write(f"{month2} 2025: {month2_reviews} reviews")
+                st.session_state.messages_insight.append({"role": "assistant", "content": f"### Analysis Results\n{month1} 2025: {month1_reviews} reviews\n{month2} 2025: {month2_reviews} reviews"})
 
                 fig = go.Figure(data=[
                     go.Bar(x=[month1 + " 2025", month2 + " 2025"], y=[month1_reviews, month2_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
@@ -506,8 +464,7 @@ if menu == "Insight Conversation":
                     height=500,
                     width=700
                 )
-                with st.chat_message("assistant"):
-                    st.plotly_chart(fig)
+                st.session_state.messages_insight.append({"role": "assistant", "content": fig})
 
         elif "reviews" in prompt.lower() and ("last month" in prompt.lower() or "this month" in prompt.lower()):
             current_date = datetime.now()
@@ -544,13 +501,8 @@ if menu == "Insight Conversation":
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
             st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
-            with st.chat_message("assistant"):
-                st.write(response.choices[0].message.content)
 
-            with st.chat_message("assistant"):
-                st.write("### Analysis Results")
-                st.write(f"This Month: {this_month_reviews} reviews")
-                st.write(f"Last Month: {last_month_reviews} reviews")
+            st.session_state.messages_insight.append({"role": "assistant", "content": f"### Analysis Results\nThis Month: {this_month_reviews} reviews\nLast Month: {last_month_reviews} reviews"})
 
             fig = go.Figure(data=[
                 go.Bar(x=['Last Month', 'This Month'], y=[last_month_reviews, this_month_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
@@ -562,8 +514,7 @@ if menu == "Insight Conversation":
                 height=500,
                 width=700
             )
-            with st.chat_message("assistant"):
-                st.plotly_chart(fig)
+            st.session_state.messages_insight.append({"role": "assistant", "content": fig})
 
         elif any(word in prompt.lower() for word in ["most", "least"]):
             entity = "SKU" if "sku" in prompt.lower() else "product"
@@ -587,19 +538,19 @@ if menu == "Insight Conversation":
                 st.warning(f"No valid {metric} data available for {entity}s.")
                 st.stop()
 
-            with st.chat_message("assistant"):
-                st.write("### Analysis Results")
-                for month_year in entity_metrics['month_year'].unique():
-                    month_data = entity_metrics[entity_metrics['month_year'] == month_year]
-                    max_value = month_data[metric].max()
-                    most_entities = month_data[month_data[metric] == max_value][group_column].tolist()
-                    most_entities_str = ", ".join(most_entities) if len(most_entities) > 1 else most_entities[0]
+            result = "### Analysis Results\n"
+            for month_year in entity_metrics['month_year'].unique():
+                month_data = entity_metrics[entity_metrics['month_year'] == month_year]
+                max_value = month_data[metric].max()
+                most_entities = month_data[month_data[metric] == max_value][group_column].tolist()
+                most_entities_str = ", ".join(most_entities) if len(most_entities) > 1 else most_entities[0]
 
-                    min_value = month_data[month_data[metric] > 0][metric].min() if (month_data[metric] > 0).any() else 0
-                    least_entities = month_data[month_data[metric] == min_value][group_column].tolist() if min_value > 0 else [None]
-                    least_entities_str = ", ".join(filter(None, least_entities)) if len(least_entities) > 1 else (least_entities[0] if least_entities[0] else "None")
+                min_value = month_data[month_data[metric] > 0][metric].min() if (month_data[metric] > 0).any() else 0
+                least_entities = month_data[month_data[metric] == min_value][group_column].tolist() if min_value > 0 else [None]
+                least_entities_str = ", ".join(filter(None, least_entities)) if len(least_entities) > 1 else (least_entities[0] if least_entities[0] else "None")
 
-                    st.write(f"{month_year}: Most {metric}: {most_entities_str} ({max_value}), Least {metric}: {least_entities_str} ({min_value if min_value > 0 else 0})")
+                result += f"{month_year}: Most {metric}: {most_entities_str} ({max_value}), Least {metric}: {least_entities_str} ({min_value if min_value > 0 else 0})\n"
+            st.session_state.messages_insight.append({"role": "assistant", "content": result})
 
         else:
             messages = [
@@ -610,8 +561,6 @@ if menu == "Insight Conversation":
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
             st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
-            with st.chat_message("assistant"):
-                st.write(response.choices[0].message.content)
 
 elif menu == "Shopify Catalog Analysis":
     st.title("🛒 Shopify Catalog Analysis")
@@ -621,29 +570,23 @@ elif menu == "Shopify Catalog Analysis":
     if st.session_state.shopify_first_load:
         default_query = "Which products are out of stock, and how many?"
         st.session_state.messages_shopify.append({"role": "user", "content": default_query})
-        with st.chat_message("user"):
-            st.write(default_query)
+        process_shopify_query(default_query, st.session_state.messages_shopify)
         st.session_state.shopify_first_load = False
 
-        process_shopify_query(default_query, st.session_state.messages_shopify)
-
-    # Display chat messages for Shopify Catalog Analysis (after default query)
+    # Display chat messages for Shopify Catalog Analysis
     for message in st.session_state.messages_shopify:
         with st.chat_message(message["role"]):
-            st.write(message["content"])
+            if isinstance(message["content"], go.Figure):
+                st.plotly_chart(message["content"])
+            else:
+                st.write(message["content"])
 
     # Chat input for Shopify Catalog Analysis
     if prompt := st.chat_input("Ask me about your Shopify catalog! (e.g., 'Which products are out of stock, and how many?')"):
         # Avoid reprocessing the default query if it matches
         if prompt == "Which products are out of stock, and how many?" and len(st.session_state.messages_shopify) > 1:
             st.session_state.messages_shopify.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.write(prompt)
             st.session_state.messages_shopify.append({"role": "assistant", "content": "I’ve already answered this query! Please check the chat history above or ask a different question."})
-            with st.chat_message("assistant"):
-                st.write("I’ve already answered this query! Please check the chat history above or ask a different question.")
         else:
             st.session_state.messages_shopify.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.write(prompt)
             process_shopify_query(prompt, st.session_state.messages_shopify)
