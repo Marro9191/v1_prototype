@@ -118,7 +118,7 @@ if menu == "Insight Conversation":
         df['category'] = df['category'].str.lower().replace("tootbrush", "toothbrush")
 
         # Single OpenAI response
-        messages = [{"role": "user", "content": f"Here's a document: {document} \n\n---\n\n {question}"}]
+        messages = [{"role": "user", "content": f"Here's a document: {document} \n\n---\n\n {question} Provide a concise response listing the totals per month and category (e.g., 'January 2025: Toothbrush 3000, Hygiene 746.')."}]
         stream = client.chat.completions.create(model="gpt-3.5-turbo", messages=messages, stream=True)
         st.subheader("Response")
         st.write_stream(stream)
@@ -169,22 +169,6 @@ if menu == "Insight Conversation":
 
             # Group by month_year and category, sum reviews
             monthly_reviews = df_filtered.groupby(['month_year', 'category'])['reviews'].sum().reset_index()
-
-            # Prepare data for OpenAI
-            openai_data = monthly_reviews.to_string()
-            messages = [
-                {
-                    "role": "user",
-                    "content": (
-                        f"Here's a dataset with columns: {list(df.columns)}. "
-                        f"Grouped data by month and category, summed reviews:\n{openai_data}\n\n"
-                        f"---\n\nCalculate the total number of reviews per month. {f'Filter by toothbrush category if specified.' if category else ''} The query is: {question}"
-                    )
-                }
-            ]
-            stream = client.chat.completions.create(model="gpt-3.5-turbo", messages=messages, stream=True)
-            st.subheader("Response")
-            st.write_stream(stream)
 
             st.subheader("Analysis Results")
             for index, row in monthly_reviews.iterrows():
