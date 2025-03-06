@@ -135,16 +135,16 @@ if menu == "Insight Conversation":
     st.title("📄 Comcore Prototype v1")
     st.write("Chat with me about your data! Upload a CSV or ask about reviews, sales, or specific months. Default data is pre-loaded.")
 
-    # Container for chat messages
-    chat_container = st.container()
+    # Main container for chat messages and responses (above input)
+    main_container = st.container()
 
-    with chat_container:
-        # Display chat messages for Insight Conversation
+    with main_container:
+        # Display existing chat messages
         for message in st.session_state.messages_insight:
             with st.chat_message(message["role"]):
                 st.write(message["content"])
 
-    # Container for input section at the bottom
+    # Input container at the bottom
     input_container = st.container()
 
     with input_container:
