@@ -81,7 +81,7 @@ def fetch_shopify_products():
         st.error(f"Error fetching Shopify data: {str(e)}")
         return pd.DataFrame()
 
-# Default CSV data as a string for Insight Conversation
+# Default CSV data as a string for CSV Analysis
 default_csv_data = """﻿date,image,SKU,promo,category,product,performance,returns,ratings,reviews,1st Page Rank,Sales
 20/01/2025,https://www.amazon.co.uk/Oral-B-Electric-Toothbrush-Travel-Designed/dp/B0DNG35BVM,1,12345,tootbrush,Jenny’s Electronic Toothbrush ,150,5,5,3000,100,1
 21/01/2025,,2,123123,hygiene,Competitor Toothbrush  ,120,3,5,200,5,2
@@ -118,46 +118,46 @@ default_csv_data = """﻿date,image,SKU,promo,category,product,performance,retur
 
 # Add sidebar with menu items
 st.sidebar.title("Navigation")
-menu = st.sidebar.radio("Menu", ["Insight Conversation", "Shopify Catalog Analysis"])
+menu = st.sidebar.radio("Menu", ["CSV Analysis", "Shopify Catalog Analysis"])
 
 # Initialize chat history and data for each tab
-if "messages_insight" not in st.session_state:
-    st.session_state.messages_insight = []
+if "messages_csv_analysis" not in st.session_state:
+    st.session_state.messages_csv_analysis = []
 if "messages_shopify" not in st.session_state:
     st.session_state.messages_shopify = []
-if "df_insight" not in st.session_state:
-    st.session_state.df_insight = pd.read_csv(io.StringIO(default_csv_data))
+if "df_csv_analysis" not in st.session_state:
+    st.session_state.df_csv_analysis = pd.read_csv(io.StringIO(default_csv_data))
 
 # Display chat interface based on selected tab
-if menu == "Insight Conversation":
-    st.title("📄 Comcore Prototype v1")
+if menu == "CSV Analysis":
+    st.title("📄 CSV Analysis")
     st.write("Chat with me about your data! Upload a CSV or ask about reviews, sales, or specific months. Default data is pre-loaded.")
 
-    # Display chat messages for Insight Conversation
-    for message in st.session_state.messages_insight:
+    # Display chat messages for CSV Analysis
+    for message in st.session_state.messages_csv_analysis:
         with st.chat_message(message["role"]):
             st.write(message["content"])
 
     # File uploader within chat interface
-    uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
+    uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="csv_analysis_uploader", help="Upload your data file to analyze.")
     if uploaded_file is not None:
         df = pd.read_csv(uploaded_file)
-        st.session_state.df_insight = df
-        st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
+        st.session_state.df_csv_analysis = df
+        st.session_state.messages_csv_analysis.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
         with st.chat_message("user"):
             st.write(f"Uploaded CSV file: {uploaded_file.name}")
-        st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
+        st.session_state.messages_csv_analysis.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
         with st.chat_message("assistant"):
             st.write("Great! I’ve loaded your CSV file. Feel free to ask questions about it!")
 
-    # Chat input for Insight Conversation
+    # Chat input for CSV Analysis
     if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
-        st.session_state.messages_insight.append({"role": "user", "content": prompt})
+        st.session_state.messages_csv_analysis.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.write(prompt)
 
         # Load and process data
-        df = st.session_state.df_insight
+        df = st.session_state.df_csv_analysis
         df['date'] = pd.to_datetime(df['date'], format='%d/%m/%Y', errors='coerce')
         if df['date'].isna().all():
             st.warning("No valid dates found in the 'date' column. Please ensure dates are in DD/MM/YYYY format.")
@@ -188,7 +188,7 @@ if menu == "Insight Conversation":
                 }
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
-            st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
+            st.session_state.messages_csv_analysis.append({"role": "assistant", "content": response.choices[0].message.content})
             with st.chat_message("assistant"):
                 st.write(response.choices[0].message.content)
 
@@ -253,7 +253,7 @@ if menu == "Insight Conversation":
                     }
                 ]
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
+                st.session_state.messages_csv_analysis.append({"role": "assistant", "content": response.choices[0].message.content})
                 with st.chat_message("assistant"):
                     st.write(response.choices[0].message.content)
 
@@ -309,7 +309,7 @@ if menu == "Insight Conversation":
                 }
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
-            st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
+            st.session_state.messages_csv_analysis.append({"role": "assistant", "content": response.choices[0].message.content})
             with st.chat_message("assistant"):
                 st.write(response.choices[0].message.content)
 
@@ -375,7 +375,7 @@ if menu == "Insight Conversation":
                 }
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
-            st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
+            st.session_state.messages_csv_analysis.append({"role": "assistant", "content": response.choices[0].message.content})
             with st.chat_message("assistant"):
                 st.write(response.choices[0].message.content)
 
