@@ -81,13 +81,24 @@ def fetch_shopify_products():
         st.error(f"Error fetching Shopify data: {str(e)}")
         return pd.DataFrame()
 
+# Callback function to handle file upload
+def handle_upload():
+    uploaded_file = st.session_state.uploaded_file
+    if uploaded_file and uploaded_file.name not in st.session_state.get("uploaded_files", set()):
+        df = pd.read_csv(uploaded_file)
+        st.session_state.df_insight = df
+        st.session_state.uploaded_files.add(uploaded_file.name)
+        st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
+        st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
+        st.session_state.has_uploaded = True
+
 # Initialize chat history and data for each tab (no preloaded data)
 if "messages_insight" not in st.session_state:
     st.session_state.messages_insight = []
 if "messages_shopify" not in st.session_state:
     st.session_state.messages_shopify = []
-if "df_insight" not in st.session_state:
-    st.session_state.df_insight = pd.DataFrame()  # Empty DataFrame until uploaded
+if "df_insight" not in st.session_state or st.session_state.df_insight.empty:
+    st.session_state.df_insight = pd.DataFrame()  # Ensure empty DataFrame at startup
 if "uploaded_files" not in st.session_state:
     st.session_state.uploaded_files = set()  # Track unique file names
 if "has_uploaded" not in st.session_state:
@@ -97,11 +108,12 @@ if "has_uploaded" not in st.session_state:
 st.markdown(
     """
     <style>
-    .main-container {
+    .main-content {
         padding-bottom: 140px; /* Space for the fixed input container */
         z-index: 1;
+        min-height: 100vh; /* Ensure content takes full height */
     }
-    .input-container {
+    .input-wrapper {
         position: fixed;
         bottom: 0;
         left: 0;
@@ -134,7 +146,7 @@ if menu == "Insight Conversation":
 
     # Main container for chat messages and responses (above input)
     with st.container():
-        st.markdown('<div class="main-container">', unsafe_allow_html=True)
+        st.markdown('<div class="main-content">', unsafe_allow_html=True)
         # Display existing chat messages
         for message in st.session_state.messages_insight:
             with st.chat_message(message["role"]):
@@ -146,18 +158,10 @@ if menu == "Insight Conversation":
 
     # Input container at the bottom with CSS styling
     with st.container():
-        st.markdown('<div class="input-container">', unsafe_allow_html=True)
-        # File uploader placed just above the chat input
-        uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
-        if uploaded_file and uploaded_file.name not in st.session_state.uploaded_files:
-            df = pd.read_csv(uploaded_file)
-            st.session_state.df_insight = df
-            st.session_state.uploaded_files.add(uploaded_file.name)
-            st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
-            st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
-            st.session_state.has_uploaded = True
-            # No rerun needed; messages will display on next render
-
+        st.markdown('<div class="input-wrapper">', unsafe_allow_html=True)
+        # File uploader with callback to handle upload event
+        st.file_uploader("Upload a CSV file", type=["csv"], key="uploaded_file", on_change=handle_upload, help="Upload your data file to analyze.")
+        
         # Chat input for Insight Conversation, directly below the file uploader
         if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
             st.session_state.messages_insight.append({"role": "user", "content": prompt})
