@@ -380,11 +380,15 @@ elif menu == "Shopify Catalog Analysis":
         "Default query is applied on first load."
     )
 
-    # Default query applied only on first load (no persistence)
-    default_query = "Which SKU has most in stock items?"
+    # Default query applied only on first load, always render text_area
     if 'first_load' not in st.session_state:
         st.session_state.first_load = True
-        question = default_query
+        default_query = "Which SKU has most in stock items?"
+        question = st.text_area(
+            "Ask a question about your Shopify catalog!",
+            value=default_query,
+            placeholder="Example: What were total number of products updated last month compared to this month for Electronics category?",
+        )
     else:
         question = st.text_area(
             "Ask a question about your Shopify catalog!",
