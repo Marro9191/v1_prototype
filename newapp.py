@@ -333,7 +333,7 @@ if menu == "Insight Conversation":
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
             st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
             with st.chat_message("assistant"):
-                st.write(response.choices[0].message.content})
+                st.write(response.choices[0].message.content)
             st.rerun()
 
             fig = go.Figure(data=[
@@ -583,7 +583,7 @@ if menu == "Insight Conversation":
                 least_entities_str = ", ".join(filter(None, least_entities)) if len(least_entities) > 1 else (least_entities[0] if least_entities[0] else "None")
 
                 result += f"{month_year}: Most {metric}: {most_entities_str} ({max_value}), Least {metric}: {least_entities_str} ({min_value if min_value > 0 else 0})\n"
-            st.session_state.messages_insight.append({"role": "assistant", "content": result})
+            st.session_state.messages_insight.append({"role": "assistant", "content": result)
             with st.chat_message("assistant"):
                 st.write(result)
             st.rerun()
