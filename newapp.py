@@ -125,7 +125,7 @@ if menu == "Insight Conversation":
     st.title("📄 Comcore Prototype v1")
     st.write(
         "Ask analytical questions about the data. Supported formats: .csv, "
-        "and you can also visualize the data with customizable charts. "
+        "and you can also visualize the data with default charts. "
         "Default data is pre-loaded."
     )
 
@@ -331,46 +331,6 @@ if menu == "Insight Conversation":
 
                 st.write(f"{month_year}: Most {metric}: {most_entities_str} ({max_value}), Least {metric}: {least_entities_str} ({min_value if min_value > 0 else 0})")
 
-        # General visualization options
-        st.subheader("Custom Visualization")
-        if not df.empty:
-            chart_type = st.selectbox("Chart Type", ["Bar", "Line", "Pie", "Scatter", "Area"])
-            x_col = st.selectbox("X-axis", df.columns)
-            numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns
-            
-            if len(numeric_cols) > 0:
-                y_col = st.selectbox("Y-axis", numeric_cols)
-                color_option = st.selectbox("Color by", ["Single Color"] + df.columns.tolist())
-                color = st.color_picker("Pick a color", "#00f900") if color_option == "Single Color" else color_option
-                chart_title = st.text_input("Chart Title", "Data Visualization")
-
-                if st.button("Generate Chart"):
-                    fig = go.Figure()
-                    if chart_type == "Bar":
-                        fig.add_trace(go.Bar(x=df[x_col], y=df[y_col], marker_color=color if color_option == "Single Color" else None))
-                    elif chart_type == "Line":
-                        fig.add_trace(go.Scatter(x=df[x_col], y=df[y_col], mode='lines', line=dict(color=color if color_option == "Single Color" else None)))
-                    elif chart_type == "Pie":
-                        pie_data = df.groupby(x_col)[y_col].sum()
-                        fig.add_trace(go.Pie(labels=pie_data.index, values=pie_data.values))
-                    elif chart_type == "Scatter":
-                        fig.add_trace(go.Scatter(
-                            x=df[x_col], y=df[y_col], mode='markers',
-                            marker=dict(color=df[color] if color_option != "Single Color" else color, size=10)
-                        ))
-                    elif chart_type == "Area":
-                        fig.add_trace(go.Scatter(
-                            x=df[x_col], y=df[y_col], fill='tozeroy',
-                            line=dict(color=color if color_option == "Single Color" else None)
-                        ))
-
-                    fig.update_layout(title=chart_title, xaxis_title=x_col, yaxis_title=y_col, height=500, width=700)
-                    st.plotly_chart(fig)
-            else:
-                st.warning("No numeric columns available for charting.")
-        else:
-            st.warning("The uploaded data is empty.")
-
 # Shopify Catalog Analysis
 elif menu == "Shopify Catalog Analysis":
     st.title("🛒 Shopify Catalog Analysis")
@@ -469,43 +429,3 @@ elif menu == "Shopify Catalog Analysis":
                     width=700
                 )
                 st.plotly_chart(fig)
-
-            # General visualization options
-            st.subheader("Custom Visualization")
-            if not df.empty:
-                chart_type = st.selectbox("Chart Type", ["Bar", "Line", "Pie", "Scatter", "Area"])
-                x_col = st.selectbox("X-axis", df.columns)
-                numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns
-                
-                if len(numeric_cols) > 0:
-                    y_col = st.selectbox("Y-axis", numeric_cols)
-                    color_option = st.selectbox("Color by", ["Single Color"] + df.columns.tolist())
-                    color = st.color_picker("Pick a color", "#00f900") if color_option == "Single Color" else color_option
-                    chart_title = st.text_input("Chart Title", "Shopify Data Visualization")
-
-                    if st.button("Generate Chart"):
-                        fig = go.Figure()
-                        if chart_type == "Bar":
-                            fig.add_trace(go.Bar(x=df[x_col], y=df[y_col], marker_color=color if color_option == "Single Color" else None))
-                        elif chart_type == "Line":
-                            fig.add_trace(go.Scatter(x=df[x_col], y=df[y_col], mode='lines', line=dict(color=color if color_option == "Single Color" else None)))
-                        elif chart_type == "Pie":
-                            pie_data = df.groupby(x_col)[y_col].sum()
-                            fig.add_trace(go.Pie(labels=pie_data.index, values=pie_data.values))
-                        elif chart_type == "Scatter":
-                            fig.add_trace(go.Scatter(
-                                x=df[x_col], y=df[y_col], mode='markers',
-                                marker=dict(color=df[color] if color_option != "Single Color" else color, size=10)
-                            ))
-                        elif chart_type == "Area":
-                            fig.add_trace(go.Scatter(
-                                x=df[x_col], y=df[y_col], fill='tozeroy',
-                                line=dict(color=color if color_option == "Single Color" else None)
-                            ))
-
-                        fig.update_layout(title=chart_title, xaxis_title=x_col, yaxis_title=y_col, height=500, width=700)
-                        st.plotly_chart(fig)
-                else:
-                    st.warning("No numeric columns available for charting.")
-            else:
-                st.warning("The fetched Shopify data is empty.")
