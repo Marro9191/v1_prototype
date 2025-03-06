@@ -169,7 +169,7 @@ def process_shopify_query(prompt, messages_list):
                 ]
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
                 messages_list.append({"role": "assistant", "content": response.choices[0].message.content})
-                st.experimental_rerun()  # Ensure the UI updates with the new message
+                st.rerun()  # Force a rerun to update the UI with the new message
 
                 fig = go.Figure(data=[
                     go.Pie(
@@ -200,7 +200,7 @@ def process_shopify_query(prompt, messages_list):
                 ]
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
                 messages_list.append({"role": "assistant", "content": response.choices[0].message.content})
-                st.experimental_rerun()  # Ensure the UI updates with the new message
+                st.rerun()  # Force a rerun to update the UI with the new message
 
                 fig = go.Figure(data=[
                     go.Pie(
@@ -254,7 +254,7 @@ def process_shopify_query(prompt, messages_list):
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
             messages_list.append({"role": "assistant", "content": response.choices[0].message.content})
-            st.experimental_rerun()  # Ensure the UI updates with the new message
+            st.rerun()  # Force a rerun to update the UI with the new message
 
             fig = go.Figure(data=[
                 go.Bar(x=['Last Month', 'This Month'], y=[last_month_count, this_month_count], marker_color=['#FF6B6B', '#4ECDC4'])
@@ -281,7 +281,7 @@ def process_shopify_query(prompt, messages_list):
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
             messages_list.append({"role": "assistant", "content": response.choices[0].message.content})
-            st.experimental_rerun()  # Ensure the UI updates with the new message
+            st.rerun()  # Force a rerun to update the UI with the new message
 
 # Display chat interface based on selected tab
 if menu == "Insight Conversation":
@@ -371,7 +371,7 @@ if menu == "Insight Conversation":
     if prompt and prompt != st.session_state.last_prompt:
         st.session_state.last_prompt = prompt
         st.session_state.messages_insight.append({"role": "user", "content": prompt})
-        st.experimental_rerun()  # Force a rerun to process the new prompt immediately
+        st.rerun()  # Force a rerun to process the new prompt immediately
 
     # Process the prompt if it exists and has changed
     if prompt:
@@ -410,7 +410,7 @@ if menu == "Insight Conversation":
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
             st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
-            st.experimental_rerun()  # Ensure the UI updates with the new message
+            st.rerun()  # Force a rerun to update the UI with the new message
 
             colors = {'toothbrush': '#FF6B6B', 'hygiene': '#4ECDC4'}
             data_traces = []
@@ -459,7 +459,7 @@ if menu == "Insight Conversation":
                 ]
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
                 st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
-                st.experimental_rerun()  # Ensure the UI updates with the new message
+                st.rerun()  # Force a rerun to update the UI with the new message
 
                 fig = go.Figure(data=[
                     go.Bar(x=[month1 + " 2025", month2 + " 2025"], y=[month1_reviews, month2_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
@@ -508,7 +508,7 @@ if menu == "Insight Conversation":
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
             st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
-            st.experimental_rerun()  # Ensure the UI updates with the new message
+            st.rerun()  # Force a rerun to update the UI with the new message
 
             fig = go.Figure(data=[
                 go.Bar(x=['Last Month', 'This Month'], y=[last_month_reviews, this_month_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
@@ -557,7 +557,7 @@ if menu == "Insight Conversation":
 
                 result += f"{month_year}:\n- Most {metric}: {most_entities_str} ({max_value})\n- Least {metric}: {least_entities_str} ({min_value if min_value > 0 else 0})\n\n"
             st.session_state.messages_insight.append({"role": "assistant", "content": result})
-            st.experimental_rerun()  # Ensure the UI updates with the new message
+            st.rerun()  # Force a rerun to update the UI with the new message
 
         else:
             messages = [
@@ -568,7 +568,7 @@ if menu == "Insight Conversation":
             ]
             response = client.chat.completions.create(model="gpt-4o", messages=messages)
             st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
-            st.experimental_rerun()  # Ensure the UI updates with the new message
+            st.rerun()  # Force a rerun to update the UI with the new message
 
 elif menu == "Shopify Catalog Analysis":
     st.title("🛒 Shopify Catalog Analysis")
@@ -608,7 +608,7 @@ elif menu == "Shopify Catalog Analysis":
     if prompt and prompt != st.session_state.last_prompt:
         st.session_state.last_prompt = prompt
         st.session_state.messages_shopify.append({"role": "user", "content": prompt})
-        st.experimental_rerun()  # Force a rerun to process the new prompt immediately
+        st.rerun()  # Force a rerun to process the new prompt immediately
 
     # Process the prompt if it exists and has changed
     if prompt:
