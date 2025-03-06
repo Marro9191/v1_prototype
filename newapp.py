@@ -111,6 +111,9 @@ if menu == "Insight Conversation":
             st.warning("No valid dates found in the 'date' column. Please ensure dates are in DD/MM/YYYY format.")
             st.stop()
 
+        # Create month_year column before filtering
+        df['month_year'] = df['date'].dt.strftime('%B %Y')
+
         # Single OpenAI response
         messages = [{"role": "user", "content": f"Here's a document: {document} \n\n---\n\n {question}"}]
         stream = client.chat.completions.create(model="gpt-3.5-turbo", messages=messages, stream=True)
@@ -126,7 +129,7 @@ if menu == "Insight Conversation":
             last_month = 12 if current_month == 1 else current_month - 1
 
             category = "toothbrush" if "toothbrush" in question.lower() else None
-            df_filtered = df[df['category'].str.lower() == category.lower()] if category else df
+            df_filtered = df[df['category'].str.lower().str.contains("toot?brush", na=False)] if category else df
 
             this_month_data = df_filtered[
                 (df_filtered['date'].dt.month == current_month) & 
@@ -159,10 +162,9 @@ if menu == "Insight Conversation":
         # Custom analysis for total number of reviews per month
         elif "total number of reviews per month" in question.lower():
             category = "toothbrush" if "toothbrush" in question.lower() else None
-            df_filtered = df[df['category'].str.lower() == category.lower()] if category else df
+            df_filtered = df[df['category'].str.lower().str.contains("toot?brush", na=False)] if category else df
 
-            # Group by month and year, sum reviews
-            df['month_year'] = df['date'].dt.strftime('%B %Y')
+            # Group by month_year, sum reviews
             monthly_reviews = df_filtered.groupby('month_year')['reviews'].sum().reset_index()
 
             # Prepare data for OpenAI
