@@ -6,6 +6,7 @@ from datetime import datetime
 import requests
 import json
 import re
+import io
 
 # Add sidebar with menu items
 st.sidebar.title("Navigation")
@@ -84,26 +85,71 @@ def fetch_shopify_products():
         st.error(f"Error fetching Shopify data: {str(e)}")
         return pd.DataFrame()
 
+# Default CSV data as a string
+default_csv_data = """﻿date,image,SKU,promo,category,product,performance,returns,ratings,reviews,1st Page Rank,Sales
+20/01/2025,https://www.amazon.co.uk/Oral-B-Electric-Toothbrush-Travel-Designed/dp/B0DNG35BVM,1,12345,tootbrush,Jenny’s Electronic Toothbrush ,150,5,5,3000,100,1
+21/01/2025,,2,123123,hygiene,Competitor Toothbrush  ,120,3,5,200,5,2
+22/01/2025,,3,2334234,hygiene,Jenny’s Electronic Toothbrush,145,2,5,400,10,3
+23/01/2025,,4,656,hygiene,Jenny’s Electronic Toothbrush,145,2,5,30,30,4
+24/01/2025,,5,345345,hygiene,Jenny’s Electronic Toothbrush,145,2,5,10,12,5
+25/01/2025,,6,34535,hygiene,Jenny’s Electronic Toothbrush,145,2,5,11,39,6
+26/01/2025,,7,34555,hygiene,Jenny’s Electronic Toothbrush,145,2,5,5,100,7
+27/01/2025,,8,2342,hygiene,Jenny’s Electronic Toothbrush,145,2,5,5,121,8
+28/01/2025,,9,2345,hygiene,Jenny’s Electronic Toothbrush,145,2,5,5,2,9
+29/01/2025,,10,23422,hygiene,Jenny’s Electronic Toothbrush,145,2,5,5,34,10
+30/01/2025,,11,23422,hygiene,Jenny’s Electronic Toothbrush,145,2,3,5,39,11
+31/01/2025,,12,234324,hygiene,Jenny’s Electronic Toothbrush,145,2,3,5,55,12
+31/01/2025,,13,2423,hygiene,Jenny’s Electronic Toothbrush,145,2,3,5,56,13
+20/02/2025,,14,443,hygiene,Jenny’s Electronic Toothbrush,145,2,3,5,45,14
+21/02/2025,,15,35656,hygiene,Jenny’s Electronic Toothbrush,145,2,3,5,343,15
+22/02/2025,,16,56563,hygiene,Jenny’s Electronic Toothbrush,145,2,3,5,32,16
+23/02/2025,,17,345345,hygiene,Jenny’s Electronic Toothbrush,145,2,3,5,234,17
+24/02/2025,,18,6553,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,120,2234,18
+25/02/2025,,19,453,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,120,45,19
+26/02/2025,,20,34576,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,23,20
+27/02/2025,,21,4545,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,34,21
+28/02/2025,,22,4566,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,65,22
+01/03/2025,,23,353456,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,543,23
+02/03/2025,,24,656756,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,13,24
+03/03/2025,,25,754646,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,34,25
+04/03/2025,,26,345432,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,33,26
+05/03/2025,,27,34535,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,66,27
+06/03/2025,,28,4564,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,77,28
+07/03/2025,,29,4567,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,90,29
+08/03/2025,,30,45646,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,31,30
+09/03/2025,,31,445667,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,34,31
+10/03/2025,,32,2234,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,31,32"""
+
 # Insight Conversation
 if menu == "Insight Conversation":
     st.title("📄 Comcore Prototype v1")
     st.write(
-        "Upload CSV file below and ask analytical questions. "
-        "Supported formats: .csv, "
+        "Ask analytical questions about the data. Supported formats: .csv, "
         "and you can also visualize the data with customizable charts. "
-        "Please note it has to be UTF-8 encoded."
+        "Default data is pre-loaded."
     )
 
-    uploaded_file = st.file_uploader("Upload a document (.csv)", type="csv")
+    # Load default CSV data if no file is uploaded
+    if 'df' not in st.session_state:
+        df = pd.read_csv(io.StringIO(default_csv_data))
+        st.session_state.df = df
+    else:
+        df = st.session_state.df
+
+    # Default query and trigger
+    if 'question' not in st.session_state:
+        st.session_state.question = "What were the total number of reviews per month for all categories?"
     question = st.text_area(
         "Now ask a question about the document!",
+        value=st.session_state.question,
         placeholder="Example: What were total number of reviews per month for toothbrush category? Or Which SKU had most Sales?",
-        disabled=not uploaded_file,
     )
 
-    if uploaded_file and question:
-        df = pd.read_csv(uploaded_file)
-        document = df.to_string()
+    # Update session state when question changes
+    if question != st.session_state.question:
+        st.session_state.question = question
+
+    if df is not None and question:
         df['date'] = pd.to_datetime(df['date'], format='%d/%m/%Y', errors='coerce')
 
         # Check for parsing issues and data integrity
@@ -147,11 +193,12 @@ if menu == "Insight Conversation":
             # Handle "most" or "least" queries
             metric = None
             for col in df.columns:
-                if "sales" in col.lower() or "sale" in col.lower():
+                if any(keyword in col.lower() for keyword in ["sales", "sale"]):
                     metric = col
                     break
             if not metric:
                 metric = "reviews"  # Default to reviews if no sales column found
+                st.warning(f"Metric '{metric}' used as default since 'sales' not found in the dataset.")
             grouped_data = df_filtered.groupby(['month_year', 'SKU'])[metric].sum().reset_index()
             openai_data = grouped_data.to_string()
             messages = [
@@ -267,7 +314,6 @@ if menu == "Insight Conversation":
             if not metric:
                 metric = "reviews"  # Default to reviews if no sales column found
                 st.warning(f"Metric '{metric}' used as default since 'sales' not found in the dataset.")
-
             group_column = entity.lower() if entity.lower() in df.columns else "SKU"  # Default to SKU if entity not found
             if group_column not in df.columns:
                 st.warning(f"Grouping column '{group_column}' not found in the dataset.")
