@@ -188,8 +188,9 @@ if menu == "Insight Conversation":
                 {
                     "role": "user",
                     "content": (
-                        f"Here's the grouped data with columns: {list(monthly_reviews.columns)}. "
-                        f"Data:\n{openai_data}\n\n---\n\n {question} Provide a concise response listing the totals per month and category (e.g., 'January 2025: Toothbrush 3000.'). Use only this data."
+                        f"Based on the provided data, provide a high-level summary of the total number of reviews per month for all categories. "
+                        f"Use the following grouped data with columns: {list(monthly_reviews.columns)}. "
+                        f"Data:\n{openai_data}\n\n---\n\n {question} Provide a concise narrative summary (e.g., 'The data shows a peak in January 2025 with 3000 reviews for Toothbrush.')."
                     )
                 }
             ]
@@ -276,8 +277,8 @@ if menu == "Insight Conversation":
             monthly_reviews = pd.DataFrame(unique_results)
 
             st.subheader("Analysis Results")
-            for index, row in monthly_reviews.iterrows():
-                st.write(f"{row['month_year']} - {row['category'].capitalize()}: {row['reviews']} reviews")
+            # Display as a table for better readability
+            st.table(monthly_reviews.style.format({'reviews': '{:,.0f}'}))
 
             # Generate automatic bar chart with different colors for each category
             colors = {'toothbrush': '#FF6B6B', 'hygiene': '#4ECDC4'}  # Define colors for categories
