@@ -136,33 +136,31 @@ if "last_processed_prompt_shopify" not in st.session_state:
 st.markdown(
     """
     <style>
+    /* Ensure the app takes full height and uses Flexbox */
     .stApp {
         display: flex;
         flex-direction: column;
         min-height: 100vh;
-        position: relative;
     }
+    /* Main content area should be scrollable */
     .content {
-        flex: 1 0 auto;
-        padding-bottom: 100px;  /* Reduced to match footer height */
+        flex: 1;
+        overflow-y: auto;
+        padding-bottom: 120px; /* Ensure space for the fixed footer */
     }
+    /* Fixed footer at the bottom */
     .footer {
-        flex-shrink: 0;
         position: fixed;
         bottom: 0;
-        width: 100%;
+        left: 0;
+        right: 0;
         background-color: #f0f2f6;
         padding: 10px;
         z-index: 1000;
-        height: 90px;  /* Fixed height for footer to match padding */
     }
+    /* Reduced space between uploader and chat input */
     .stFileUploader {
-        margin-bottom: 5px;  /* Space between uploader and chat input */
-    }
-    /* Ensure footer doesn't require scrolling */
-    body {
-        margin: 0;
-        padding: 0;
+        margin-bottom: 5px;
     }
     </style>
     """,
@@ -416,15 +414,22 @@ elif menu == "Shopify Catalog Analysis":
     st.title("🛒 Shopify Catalog Analysis")
     st.write("Analyze your Shopify catalog data. Query stock levels, product updates, or other metrics as needed.")
 
-    # Display chat messages for Shopify Catalog Analysis
-    for idx, message in enumerate(st.session_state.messages_shopify):
-        with st.chat_message(message["role"]):
-            if isinstance(message["content"], go.Figure):
-                st.plotly_chart(message["content"], key=f"shopify_plotly_chart_{idx}")
-            else:
-                st.write(message["content"])
+    # Response area (scrollable)
+    st.markdown('<div class="content">', unsafe_allow_html=True)
+    response_container = st.container()
+    with response_container:
+        if not st.session_state.messages_shopify:
+            pass  # No placeholder text
+        for idx, message in enumerate(st.session_state.messages_shopify):
+            with st.chat_message(message["role"]):
+                if isinstance(message["content"], go.Figure):
+                    st.plotly_chart(message["content"], key=f"shopify_plotly_chart_{idx}")
+                else:
+                    st.write(message["content"])
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    # Chat input for Shopify Catalog Analysis
+    # Fixed footer for chat input
+    st.markdown('<div class="footer">', unsafe_allow_html=True)
     if prompt := st.chat_input("Query your Shopify catalog (e.g., 'Which products are out of stock, and how many?')"):
         # Append user prompt
         st.session_state.messages_shopify.append({"role": "user", "content": prompt})
