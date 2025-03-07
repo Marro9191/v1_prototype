@@ -133,10 +133,12 @@ if menu == "Insight Conversation":
     st.title("📄 Comcore Prototype v1")
     st.write("Chat with me about your data! Upload a CSV or ask about reviews, sales, or specific months. Default data is pre-loaded.")
 
-    # Placeholder for chat messages (above file uploader)
-    chat_container = st.container()
+    # Placeholder for responses (display "Responses here" by default)
+    response_container = st.container()
+    with response_container:
+        st.write("Responses here")
 
-    # File uploader moved above chat input
+    # File uploader below responses
     uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
     if uploaded_file is not None:
         df = pd.read_csv(uploaded_file)
@@ -346,8 +348,8 @@ if menu == "Insight Conversation":
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
                 st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
 
-    # Display all chat messages in the container above the file uploader
-    with chat_container:
+    # Display all chat messages in the response container
+    with response_container:
         for message in st.session_state.messages_insight:
             with st.chat_message(message["role"]):
                 if isinstance(message["content"], go.Figure):
