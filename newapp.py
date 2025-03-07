@@ -81,6 +81,17 @@ def fetch_shopify_products():
         st.error(f"Error fetching Shopify data: {str(e)}")
         return pd.DataFrame()
 
+# Callback function to handle file upload
+def handle_upload():
+    uploaded_file = st.session_state.uploaded_file
+    if uploaded_file and uploaded_file.name not in st.session_state.get("uploaded_files", set()):
+        df = pd.read_csv(uploaded_file)
+        st.session_state.df_insight = df
+        st.session_state.uploaded_files.add(uploaded_file.name)
+        st.session_state.last_uploaded_file = uploaded_file.name
+        st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
+        st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
+
 # Default CSV data as a string for Insight Conversation
 default_csv_data = """﻿date,image,SKU,promo,category,product,performance,returns,ratings,reviews,1st Page Rank,Sales
 20/01/2025,https://www.amazon.co.uk/Oral-B-Electric-Toothbrush-Travel-Designed/dp/B0DNG35BVM,1,12345,tootbrush,Jenny’s Electronic Toothbrush ,150,5,5,3000,100,1
@@ -126,59 +137,80 @@ if "messages_insight" not in st.session_state:
 if "messages_shopify" not in st.session_state:
     st.session_state.messages_shopify = []
 if "df_insight" not in st.session_state:
-    st.session_state.df_insight = pd.read_csv(io.StringIO(default_csv_data))
-if "file_uploaded" not in st.session_state:
-    st.session_state.file_uploaded = False
+    st.session_state.df_insight = pd.read_csv(io.StringIO(default_csv_data))  # Preloaded data
+if "uploaded_files" not in st.session_state:
+    st.session_state.uploaded_files = set()  # Track unique file names
+if "last_uploaded_file" not in st.session_state:
+    st.session_state.last_uploaded_file = None  # Track the last uploaded file
+if "upload_message_added" not in st.session_state:
+    st.session_state.upload_message_added = {}  # Track which files have had upload messages
+
+# Custom CSS to enforce layout
+st.markdown(
+    """
+    <style>
+    .main-content {
+        padding-bottom: 150px; /* Increased space for the fixed input container */
+        z-index: 1;
+        min-height: 100vh; /* Ensure content takes full height */
+    }
+    .input-wrapper {
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        background-color: white !important;
+        padding: 10px !important;
+        z-index: 1002 !important;
+        border-top: 1px solid #ccc !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0px !important; /* No gap between uploader and chat input */
+    }
+    .stFileUploader {
+        margin-bottom: 0px !important; /* Remove space below uploader */
+        padding-bottom: 0px !important;
+    }
+    .stChatInput {
+        margin-top: 0px !important; /* Remove space above chat input */
+        padding-top: 0px !important;
+    }
+    /* Ensure main content stays above input wrapper */
+    .stApp {
+        overflow: auto !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 # Display chat interface based on selected tab
 if menu == "Insight Conversation":
     st.title("📄 Comcore Prototype v1")
     st.write("Chat with me about your data! Upload a CSV or ask about reviews, sales, or specific months. Default data is pre-loaded.")
 
-    # Render all chat messages and analysis results in the main content area
-    for message in st.session_state.messages_insight:
-        with st.chat_message(message["role"]):
-            if isinstance(message["content"], str):
-                st.write(message["content"])
-            elif isinstance(message["content"], go.Figure):
-                st.plotly_chart(message["content"])
-
-    # Add spacing to push the input section to the bottom
-    st.markdown("<div style='height: 50vh;'></div>", unsafe_allow_html=True)
-
-    # Fixed container for file uploader and chat input at the bottom
+    # Main container for chat messages and responses (above input)
     with st.container():
-        st.markdown(
-            """
-            <style>
-            .stContainer {
-                position: fixed;
-                bottom: 0;
-                width: 100%;
-                background: white;
-                padding: 10px;
-                z-index: 100;
-                box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
-            }
-            </style>
-            """,
-            unsafe_allow_html=True
-        )
+        st.markdown('<div class="main-content">', unsafe_allow_html=True)
+        # Display existing chat messages
+        for message in st.session_state.messages_insight:
+            with st.chat_message(message["role"]):
+                st.write(message["content"])
+        st.markdown('</div>', unsafe_allow_html=True)
 
-        # File uploader with a flag to prevent continuous reruns
-        uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
-        if uploaded_file and not st.session_state.file_uploaded:
-            df = pd.read_csv(uploaded_file)
-            st.session_state.df_insight = df
-            st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
-            st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
-            st.session_state.file_uploaded = True  # Set flag to prevent reprocessing
-            st.rerun()  # Rerun once to update the display
+    # Input container at the bottom with CSS styling
+    with st.container():
+        st.markdown('<div class="input-wrapper">', unsafe_allow_html=True)
+        # File uploader placed just above the chat input
+        uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", on_change=handle_upload, args=(st.session_state,), help="Upload your data file to analyze.")
+        if uploaded_file and uploaded_file.name not in st.session_state.upload_message_added:
+            st.session_state.upload_message_added[uploaded_file.name] = True
 
-        # Chat input
+        # Chat input for Insight Conversation, directly below the file uploader
         if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
             st.session_state.messages_insight.append({"role": "user", "content": prompt})
-            st.rerun()  # Rerun to refresh the display with the new prompt
+            with st.chat_message("user"):
+                st.write(prompt)
 
             # Load and process data
             df = st.session_state.df_insight
@@ -186,7 +218,7 @@ if menu == "Insight Conversation":
             if df['date'].isna().all():
                 st.warning("No valid dates found in the 'date' column. Please ensure dates are in DD/MM/YYYY format.")
                 st.stop()
-            st.write(f"Loaded {len(df)} rows from {'uploaded CSV' if st.session_state.file_uploaded else 'default data'}.")  # Debug row count
+            st.write(f"Loaded {len(df)} rows from {'uploaded CSV' if st.session_state.last_uploaded_file else 'default data'}.")  # Debug row count
             df['month_year'] = df['date'].dt.strftime('%B %Y')
             df['category'] = df['category'].str.lower().replace("tootbrush", "toothbrush")
 
@@ -199,6 +231,9 @@ if menu == "Insight Conversation":
 
             # Process the query
             if "total number of reviews per month" in prompt.lower():
+                if 'reviews' not in df.columns:
+                    st.warning("The 'reviews' column is not found in the data.")
+                    st.stop()
                 monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
                 openai_data = monthly_reviews.to_string()
                 messages = [
@@ -251,12 +286,13 @@ if menu == "Insight Conversation":
                     barmode='group',
                     showlegend=True
                 )
-                st.session_state.messages_insight.append({"role": "assistant", "content": fig})
                 with st.chat_message("assistant"):
                     st.plotly_chart(fig)
 
             elif "compared to" in prompt.lower() and "reviews" in prompt.lower():
-                # Extract the two months from the query
+                if 'reviews' not in df.columns:
+                    st.warning("The 'reviews' column is not found in the data.")
+                    st.stop()
                 months = re.findall(r'\b(January|February|March|April|May|June|July|August|September|October|November|December)\b', prompt, re.IGNORECASE)
                 if len(months) >= 2:
                     month1, month2 = months[0], months[1]
@@ -297,11 +333,13 @@ if menu == "Insight Conversation":
                         height=500,
                         width=700
                     )
-                    st.session_state.messages_insight.append({"role": "assistant", "content": fig})
                     with st.chat_message("assistant"):
                         st.plotly_chart(fig)
 
             elif "reviews" in prompt.lower() and ("last month" in prompt.lower() or "this month" in prompt.lower()):
+                if 'reviews' not in df.columns:
+                    st.warning("The 'reviews' column is not found in the data.")
+                    st.stop()
                 current_date = datetime.now()
                 current_month = current_date.month
                 current_year = current_date.year
@@ -354,7 +392,6 @@ if menu == "Insight Conversation":
                     height=500,
                     width=700
                 )
-                st.session_state.messages_insight.append({"role": "assistant", "content": fig})
                 with st.chat_message("assistant"):
                     st.plotly_chart(fig)
 
@@ -366,8 +403,10 @@ if menu == "Insight Conversation":
                         metric = col
                         break
                 if not metric:
-                    metric = "reviews"
-                    st.warning(f"Metric '{metric}' used as default since 'sales' not found in the dataset.")
+                    metric = "reviews" if "reviews" in df.columns else None
+                    if not metric:
+                        st.warning("No 'sales' or 'reviews' column found in the data.")
+                        st.stop()
                 group_column = entity.lower() if entity.lower() in df.columns else "SKU"
                 if group_column not in df.columns:
                     st.warning(f"Grouping column '{group_column}' not found in the dataset.")
@@ -413,15 +452,13 @@ elif menu == "Shopify Catalog Analysis":
     # Display chat messages for Shopify Catalog Analysis
     for message in st.session_state.messages_shopify:
         with st.chat_message(message["role"]):
-            if isinstance(message["content"], str):
-                st.write(message["content"])
-            elif isinstance(message["content"], go.Figure):
-                st.plotly_chart(message["content"])
+            st.write(message["content"])
 
     # Chat input for Shopify Catalog Analysis
     if prompt := st.chat_input("Ask me about your Shopify catalog! (e.g., 'Which products are out of stock, and how many?')"):
         st.session_state.messages_shopify.append({"role": "user", "content": prompt})
-        st.rerun()  # Rerun to refresh the display with the new prompt
+        with st.chat_message("user"):
+            st.write(prompt)
 
         with st.spinner("Fetching Shopify catalog data via GraphQL..."):
             df = fetch_shopify_products()
@@ -439,8 +476,7 @@ elif menu == "Shopify Catalog Analysis":
 
                 if out_of_stock_count > 0:
                     out_of_stock_list = out_of_stock[['title', 'sku']].drop_duplicates().to_dict('records')
-                    # Select a few examples for the response
-                    sample_products = out_of_stock_list[:3]  # Limit to 3 examples for conciseness
+                    sample_products = out_of_stock_list[:3]
                     sample_text = "\n".join([f"{i+1}. {item['title']} (SKU: {item['sku']}) - 0 items in stock" for i, item in enumerate(sample_products)])
                     if len(out_of_stock_list) > 3:
                         sample_text += "\n(and more!)"
@@ -461,6 +497,7 @@ elif menu == "Shopify Catalog Analysis":
                     st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                     with st.chat_message("assistant"):
                         st.write(response.choices[0].message.content)
+                    st.rerun()
 
                     fig = go.Figure(data=[
                         go.Pie(
@@ -478,8 +515,6 @@ elif menu == "Shopify Catalog Analysis":
                         showlegend=True
                     )
                     st.session_state.messages_shopify.append({"role": "assistant", "content": fig})
-                    with st.chat_message("assistant"):
-                        st.plotly_chart(fig)
 
                 else:
                     messages = [
@@ -495,6 +530,7 @@ elif menu == "Shopify Catalog Analysis":
                     st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                     with st.chat_message("assistant"):
                         st.write(response.choices[0].message.content)
+                    st.rerun()
 
                     fig = go.Figure(data=[
                         go.Pie(
@@ -512,8 +548,6 @@ elif menu == "Shopify Catalog Analysis":
                         showlegend=True
                     )
                     st.session_state.messages_shopify.append({"role": "assistant", "content": fig})
-                    with st.chat_message("assistant"):
-                        st.plotly_chart(fig)
 
             elif "last month" in prompt.lower() and "this month" in prompt.lower():
                 current_date = datetime.now()
@@ -552,6 +586,7 @@ elif menu == "Shopify Catalog Analysis":
                 st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                 with st.chat_message("assistant"):
                     st.write(response.choices[0].message.content)
+                st.rerun()
 
                 fig = go.Figure(data=[
                     go.Bar(x=['Last Month', 'This Month'], y=[last_month_count, this_month_count], marker_color=['#FF6B6B', '#4ECDC4'])
@@ -564,8 +599,6 @@ elif menu == "Shopify Catalog Analysis":
                     width=700
                 )
                 st.session_state.messages_shopify.append({"role": "assistant", "content": fig})
-                with st.chat_message("assistant"):
-                    st.plotly_chart(fig)
 
             else:
                 messages = [
@@ -582,3 +615,4 @@ elif menu == "Shopify Catalog Analysis":
                 st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                 with st.chat_message("assistant"):
                     st.write(response.choices[0].message.content)
+                st.rerun()
