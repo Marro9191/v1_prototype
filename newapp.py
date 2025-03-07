@@ -127,6 +127,10 @@ if "messages_shopify" not in st.session_state:
     st.session_state.messages_shopify = []
 if "df_insight" not in st.session_state:
     st.session_state.df_insight = pd.read_csv(io.StringIO(default_csv_data))
+if "last_processed_prompt_insight" not in st.session_state:
+    st.session_state.last_processed_prompt_insight = None
+if "last_processed_prompt_shopify" not in st.session_state:
+    st.session_state.last_processed_prompt_shopify = None
 
 # Custom CSS to fix the file uploader and chat input at the bottom
 st.markdown(
@@ -173,7 +177,7 @@ if menu == "Insight Conversation":
             with st.chat_message(message["role"]):
                 if isinstance(message["content"], go.Figure):
                     st.plotly_chart(message["content"], key=f"plotly_chart_{idx}")
-                elif message["content"].startswith("### Analysis Results\n"):
+                elif isinstance(message["content"], str) and message["content"].startswith("### Analysis Results\n"):
                     st.write("### Analysis Results")
                     st.markdown(message["content"].split('\n', 1)[1], unsafe_allow_html=True)
                 else:
@@ -189,32 +193,32 @@ if menu == "Insight Conversation":
         # No success message appended as per request
 
     if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
-        # Only append user prompt if it's not a duplicate
-        if not any(msg["content"] == prompt and msg["role"] == "user" for msg in st.session_state.messages_insight):
-            st.session_state.messages_insight.append({"role": "user", "content": prompt})
+        # Append user prompt
+        st.session_state.messages_insight.append({"role": "user", "content": prompt})
 
         # Load and process data
         df = st.session_state.df_insight
         df['date'] = pd.to_datetime(df['date'], format='%d/%m/%Y', errors='coerce')
         if df['date'].isna().all():
-            if not any(msg["content"] == "No valid dates found in the 'date' column. Please ensure dates are in DD/MM/YYYY format." for msg in st.session_state.messages_insight):
-                st.session_state.messages_insight.append({"role": "assistant", "content": "No valid dates found in the 'date' column. Please ensure dates are in DD/MM/YYYY format."})
+            st.session_state.messages_insight.append({"role": "assistant", "content": "No valid dates found in the 'date' column. Please ensure dates are in DD/MM/YYYY format."})
+            st.rerun()
         else:
-            if not any(msg["content"].startswith("Loaded") for msg in st.session_state.messages_insight):
-                st.session_state.messages_insight.append({"role": "assistant", "content": f"Loaded {len(df)} rows from {'uploaded CSV' if uploaded_file else 'default data'}."})
-            df['month_year'] = df['date'].dt.strftime('%B %Y')
-            df['category'] = df['category'].str.lower().replace("tootbrush", "toothbrush")
+            # Process the query only if it's different from the last processed prompt
+            if st.session_state.last_processed_prompt_insight != prompt:
+                st.session_state.last_processed_prompt_insight = prompt
 
-            category_filter = None
-            if "toothbrush" in prompt.lower():
-                category_filter = "toothbrush"
-            elif "all categories" in prompt.lower() or "all" in prompt.lower():
+                df['month_year'] = df['date'].dt.strftime('%B %Y')
+                df['category'] = df['category'].str.lower().replace("tootbrush", "toothbrush")
+
                 category_filter = None
-            df_filtered = df if category_filter is None else df[df['category'] == category_filter]
+                if "toothbrush" in prompt.lower():
+                    category_filter = "toothbrush"
+                elif "all categories" in prompt.lower() or "all" in prompt.lower():
+                    category_filter = None
+                df_filtered = df if category_filter is None else df[df['category'] == category_filter]
 
-            # Process the query only if not already processed
-            if "total number of reviews per month" in prompt.lower():
-                if not any(isinstance(msg["content"], str) and msg["content"].startswith("Hey!") and "reviews per month" in msg["content"].lower() for msg in st.session_state.messages_insight):
+                # Process the query
+                if "total number of reviews per month" in prompt.lower():
                     monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
                     openai_data = monthly_reviews.to_string()
                     messages = [
@@ -263,9 +267,9 @@ if menu == "Insight Conversation":
                         showlegend=True
                     )
                     st.session_state.messages_insight.append({"role": "assistant", "content": fig})
+                    st.rerun()
 
-            elif "compared to" in prompt.lower() and "reviews" in prompt.lower():
-                if not any(isinstance(msg["content"], str) and "compared to" in msg["content"].lower() and "reviews" in msg["content"].lower() for msg in st.session_state.messages_insight):
+                elif "compared to" in prompt.lower() and "reviews" in prompt.lower():
                     months = re.findall(r'\b(January|February|March|April|May|June|July|August|September|October|November|December)\b', prompt, re.IGNORECASE)
                     if len(months) >= 2:
                         month1, month2 = months[0], months[1]
@@ -301,9 +305,9 @@ if menu == "Insight Conversation":
                             width=700
                         )
                         st.session_state.messages_insight.append({"role": "assistant", "content": fig})
+                        st.rerun()
 
-            elif "reviews" in prompt.lower() and ("last month" in prompt.lower() or "this month" in prompt.lower()):
-                if not any(isinstance(msg["content"], str) and ("last month" in msg["content"].lower() or "this month" in msg["content"].lower()) for msg in st.session_state.messages_insight):
+                elif "reviews" in prompt.lower() and ("last month" in prompt.lower() or "this month" in prompt.lower()):
                     current_date = datetime.now()
                     current_month = current_date.month
                     current_year = current_date.year
@@ -351,9 +355,9 @@ if menu == "Insight Conversation":
                         width=700
                     )
                     st.session_state.messages_insight.append({"role": "assistant", "content": fig})
+                    st.rerun()
 
-            elif any(word in prompt.lower() for word in ["most", "least"]):
-                if not any(isinstance(msg["content"], str) and ("most" in msg["content"].lower() or "least" in msg["content"].lower()) for msg in st.session_state.messages_insight):
+                elif any(word in prompt.lower() for word in ["most", "least"]):
                     entity = "SKU" if "sku" in prompt.lower() else "product"
                     metric = None
                     for col in df.columns:
@@ -362,19 +366,16 @@ if menu == "Insight Conversation":
                             break
                     if not metric:
                         metric = "reviews"
-                        if not any(msg["content"] == f"Metric '{metric}' used as default since 'sales' not found in the dataset." for msg in st.session_state.messages_insight):
-                            st.session_state.messages_insight.append({"role": "assistant", "content": f"Metric '{metric}' used as default since 'sales' not found in the dataset."})
+                        st.session_state.messages_insight.append({"role": "assistant", "content": f"Metric '{metric}' used as default since 'sales' not found in the dataset."})
                     group_column = entity.lower() if entity.lower() in df.columns else "SKU"
                     if group_column not in df.columns:
-                        if not any(msg["content"] == f"Grouping column '{group_column}' not found in the dataset." for msg in st.session_state.messages_insight):
-                            st.session_state.messages_insight.append({"role": "assistant", "content": f"Grouping column '{group_column}' not found in the dataset."})
+                        st.session_state.messages_insight.append({"role": "assistant", "content": f"Grouping column '{group_column}' not found in the dataset."})
                     else:
                         df['month_year'] = df['date'].dt.strftime('%B %Y')
                         entity_metrics = df.groupby(['month_year', group_column])[metric].sum().reset_index()
 
                         if entity_metrics.empty or entity_metrics[metric].isna().all():
-                            if not any(msg["content"] == f"No valid {metric} data available for {entity}s." for msg in st.session_state.messages_insight):
-                                st.session_state.messages_insight.append({"role": "assistant", "content": f"No valid {metric} data available for {entity}s."})
+                            st.session_state.messages_insight.append({"role": "assistant", "content": f"No valid {metric} data available for {entity}s."})
                         else:
                             result_text = "### Analysis Results\n"
                             for month_year in entity_metrics['month_year'].unique():
@@ -388,11 +389,10 @@ if menu == "Insight Conversation":
                                 least_entities_str = ", ".join(filter(None, map(str, least_entities))) if len(least_entities) > 1 else (str(least_entities[0]) if least_entities[0] else "None")
 
                                 result_text += f"{month_year}: Most {metric}: {most_entities_str} ({max_value}), Least {metric}: {least_entities_str} ({min_value if min_value > 0 else 0})\n"
-                            if not any(isinstance(msg["content"], str) and msg["content"].startswith(result_text.split('\n')[0]) for msg in st.session_state.messages_insight):
-                                st.session_state.messages_insight.append({"role": "assistant", "content": result_text})
+                            st.session_state.messages_insight.append({"role": "assistant", "content": result_text})
+                            st.rerun()
 
-            else:
-                if not any(isinstance(msg["content"], str) and "I don’t fully understand" in msg["content"] for msg in st.session_state.messages_insight):
+                else:
                     messages = [
                         {
                             "role": "user",
@@ -401,6 +401,7 @@ if menu == "Insight Conversation":
                     ]
                     response = client.chat.completions.create(model="gpt-4o", messages=messages)
                     st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
+                    st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
 # Shopify Catalog Analysis (corrected syntax)
@@ -418,25 +419,27 @@ elif menu == "Shopify Catalog Analysis":
 
     # Chat input for Shopify Catalog Analysis
     if prompt := st.chat_input("Ask me about your Shopify catalog! (e.g., 'Which products are out of stock, and how many?')"):
-        # Only append user prompt if it's not a duplicate
-        if not any(msg["content"] == prompt and msg["role"] == "user" for msg in st.session_state.messages_shopify):
-            st.session_state.messages_shopify.append({"role": "user", "content": prompt})
+        # Append user prompt
+        st.session_state.messages_shopify.append({"role": "user", "content": prompt})
 
         with st.spinner("Fetching Shopify catalog data via GraphQL..."):
             df = fetch_shopify_products()
 
         if df.empty:
-            if not any(msg["content"] == "Oops! I couldn’t fetch the Shopify data. Please check your API credentials." for msg in st.session_state.messages_shopify):
-                st.session_state.messages_shopify.append({"role": "assistant", "content": "Oops! I couldn’t fetch the Shopify data. Please check your API credentials."})
+            st.session_state.messages_shopify.append({"role": "assistant", "content": "Oops! I couldn’t fetch the Shopify data. Please check your API credentials."})
+            st.rerun()
         else:
-            document = df.to_string()
-            if "products are out of stock" in prompt.lower() and "how many" in prompt.lower():
-                out_of_stock = df[df['inventory_quantity'] == 0]
-                out_of_stock_count = len(out_of_stock)
-                in_stock_count = len(df[df['inventory_quantity'] > 0])
+            # Process the query only if it's different from the last processed prompt
+            if st.session_state.last_processed_prompt_shopify != prompt:
+                st.session_state.last_processed_prompt_shopify = prompt
 
-                if out_of_stock_count > 0:
-                    if not any(isinstance(msg["content"], str) and msg["content"].startswith(f"Hey there! We’ve got {out_of_stock_count}") for msg in st.session_state.messages_shopify):
+                document = df.to_string()
+                if "products are out of stock" in prompt.lower() and "how many" in prompt.lower():
+                    out_of_stock = df[df['inventory_quantity'] == 0]
+                    out_of_stock_count = len(out_of_stock)
+                    in_stock_count = len(df[df['inventory_quantity'] > 0])
+
+                    if out_of_stock_count > 0:
                         out_of_stock_list = out_of_stock[['title', 'sku']].drop_duplicates().to_dict('records')
                         sample_products = out_of_stock_list[:3]
                         sample_text = "\n".join([f"{i+1}. {item['title']} (SKU: {item['sku']}) - 0 items in stock" for i, item in enumerate(sample_products)])
@@ -474,9 +477,9 @@ elif menu == "Shopify Catalog Analysis":
                             showlegend=True
                         )
                         st.session_state.messages_shopify.append({"role": "assistant", "content": fig})
+                        st.rerun()
 
-                else:
-                    if not any(isinstance(msg["content"], str) and msg["content"].startswith("Hey there! Great news") for msg in st.session_state.messages_shopify):
+                    else:
                         messages = [
                             {
                                 "role": "user",
@@ -507,9 +510,9 @@ elif menu == "Shopify Catalog Analysis":
                             showlegend=True
                         )
                         st.session_state.messages_shopify.append({"role": "assistant", "content": fig})
+                        st.rerun()
 
-            elif "last month" in prompt.lower() and "this month" in prompt.lower():
-                if not any(isinstance(msg["content"], str) and "last month" in msg["content"].lower() and "this month" in msg["content"].lower() for msg in st.session_state.messages_shopify):
+                elif "last month" in prompt.lower() and "this month" in prompt.lower():
                     current_date = datetime.now()
                     current_month = current_date.month
                     current_year = current_date.year
@@ -556,9 +559,9 @@ elif menu == "Shopify Catalog Analysis":
                         width=700
                     )
                     st.session_state.messages_shopify.append({"role": "assistant", "content": fig})
+                    st.rerun()
 
-            else:
-                if not any(isinstance(msg["content"], str) and "You can ask me about stock levels" in msg["content"] for msg in st.session_state.messages_shopify):
+                else:
                     messages = [
                         {
                             "role": "user",
@@ -573,4 +576,5 @@ elif menu == "Shopify Catalog Analysis":
                     st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                     with st.chat_message("assistant"):
                         st.write(response.choices[0].message.content)
+                    st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
