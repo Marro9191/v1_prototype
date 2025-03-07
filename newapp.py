@@ -133,9 +133,9 @@ st.markdown(
     """
     <style>
     .main-content {
-        padding-bottom: 60px; /* Match the height of the input container */
+        padding-bottom: 70px; /* Match the height of the input container */
         min-height: 0; /* Remove fixed min-height to avoid extra space */
-        max-height: calc(100vh - 60px); /* Constrain content height */
+        max-height: calc(100vh - 70px); /* Constrain content height */
         overflow-y: auto; /* Enable scrolling within content if needed */
     }
     .input-container {
@@ -151,27 +151,29 @@ st.markdown(
         flex-direction: row !important;
         align-items: center !important;
         gap: 10px !important;
-        height: 60px !important; /* Fixed height for the input container */
+        height: 70px !important; /* Adjusted for taller content */
     }
     .stFileUploader {
-        flex: 1 !important;
-        max-width: 40% !important;
+        width: 50% !important; /* Match desired 50% width */
         margin: 0 !important;
         padding: 0 !important;
     }
     .stFileUploader > div {
-        height: 40px !important; /* Reduce uploader height */
+        height: 50px !important; /* Match desired height */
         display: flex !important;
         align-items: center !important;
+        overflow: hidden !important;
     }
     .stChatInput {
-        flex: 1 !important;
-        max-width: 60% !important;
+        width: 50% !important; /* Match desired 50% width */
         margin: 0 !important;
         padding: 0 !important;
     }
     .stChatInput > div > div {
-        height: 40px !important; /* Match uploader height */
+        height: 50px !important; /* Match desired height */
+        display: flex !important;
+        align-items: center !important;
+        overflow: hidden !important;
     }
     /* Ensure main content stays above input areas */
     .stApp {
