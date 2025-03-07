@@ -133,13 +133,36 @@ if menu == "Insight Conversation":
     st.title("📄 Comcore Prototype v1")
     st.write("Chat with me about your data! Upload a CSV or ask about reviews, sales, or specific months. Default data is pre-loaded.")
 
-    # Display chat messages for Insight Conversation
+    # Display chat messages and analysis results first
     for message in st.session_state.messages_insight:
         with st.chat_message(message["role"]):
             st.write(message["content"])
+            # Check if the message content is a Plotly figure (stored in session state)
+            if isinstance(message["content"], go.Figure):
+                st.plotly_chart(message["content"])
 
-    # Use a container to group file uploader and chat input
+    # Add spacing to push the input section to the bottom
+    st.markdown("<div style='height: 50vh;'></div>", unsafe_allow_html=True)
+
+    # Container for file uploader and chat input at the bottom
     with st.container():
+        # Custom CSS to fix the container at the bottom
+        st.markdown(
+            """
+            <style>
+            .stContainer {
+                position: fixed;
+                bottom: 0;
+                width: 100%;
+                background: white;
+                padding: 10px;
+                z-index: 100;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+
         # File uploader
         uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
         if uploaded_file is not None:
@@ -229,6 +252,7 @@ if menu == "Insight Conversation":
                     barmode='group',
                     showlegend=True
                 )
+                st.session_state.messages_insight.append({"role": "assistant", "content": fig})
                 with st.chat_message("assistant"):
                     st.plotly_chart(fig)
 
@@ -274,6 +298,7 @@ if menu == "Insight Conversation":
                         height=500,
                         width=700
                     )
+                    st.session_state.messages_insight.append({"role": "assistant", "content": fig})
                     with st.chat_message("assistant"):
                         st.plotly_chart(fig)
 
@@ -330,6 +355,7 @@ if menu == "Insight Conversation":
                     height=500,
                     width=700
                 )
+                st.session_state.messages_insight.append({"role": "assistant", "content": fig})
                 with st.chat_message("assistant"):
                     st.plotly_chart(fig)
 
@@ -389,8 +415,11 @@ elif menu == "Shopify Catalog Analysis":
     for message in st.session_state.messages_shopify:
         with st.chat_message(message["role"]):
             st.write(message["content"])
+            # Check if the message content is a Plotly figure
+            if isinstance(message["content"], go.Figure):
+                st.plotly_chart(message["content"])
 
-    # Chat input for Shopify Catalog Analysis
+    # Chat input for Shopify Catalog Analysis (already at the bottom by default)
     if prompt := st.chat_input("Ask me about your Shopify catalog! (e.g., 'Which products are out of stock, and how many?')"):
         st.session_state.messages_shopify.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
@@ -434,7 +463,6 @@ elif menu == "Shopify Catalog Analysis":
                     st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                     with st.chat_message("assistant"):
                         st.write(response.choices[0].message.content)
-                    st.rerun()
 
                     fig = go.Figure(data=[
                         go.Pie(
@@ -452,6 +480,8 @@ elif menu == "Shopify Catalog Analysis":
                         showlegend=True
                     )
                     st.session_state.messages_shopify.append({"role": "assistant", "content": fig})
+                    with st.chat_message("assistant"):
+                        st.plotly_chart(fig)
 
                 else:
                     messages = [
@@ -467,7 +497,6 @@ elif menu == "Shopify Catalog Analysis":
                     st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                     with st.chat_message("assistant"):
                         st.write(response.choices[0].message.content)
-                    st.rerun()
 
                     fig = go.Figure(data=[
                         go.Pie(
@@ -485,6 +514,8 @@ elif menu == "Shopify Catalog Analysis":
                         showlegend=True
                     )
                     st.session_state.messages_shopify.append({"role": "assistant", "content": fig})
+                    with st.chat_message("assistant"):
+                        st.plotly_chart(fig)
 
             elif "last month" in prompt.lower() and "this month" in prompt.lower():
                 current_date = datetime.now()
@@ -523,7 +554,6 @@ elif menu == "Shopify Catalog Analysis":
                 st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                 with st.chat_message("assistant"):
                     st.write(response.choices[0].message.content)
-                st.rerun()
 
                 fig = go.Figure(data=[
                     go.Bar(x=['Last Month', 'This Month'], y=[last_month_count, this_month_count], marker_color=['#FF6B6B', '#4ECDC4'])
@@ -536,6 +566,8 @@ elif menu == "Shopify Catalog Analysis":
                     width=700
                 )
                 st.session_state.messages_shopify.append({"role": "assistant", "content": fig})
+                with st.chat_message("assistant"):
+                    st.plotly_chart(fig)
 
             else:
                 messages = [
@@ -552,4 +584,3 @@ elif menu == "Shopify Catalog Analysis":
                 st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                 with st.chat_message("assistant"):
                     st.write(response.choices[0].message.content)
-                st.rerun()
