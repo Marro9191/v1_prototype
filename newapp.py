@@ -138,7 +138,7 @@ if menu == "Insight Conversation":
         with st.chat_message(message["role"]):
             st.write(message["content"])
 
-    # File uploader section
+    # File uploader within chat interface
     uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
     if uploaded_file is not None:
         df = pd.read_csv(uploaded_file)
@@ -339,7 +339,7 @@ if menu == "Insight Conversation":
                     metric = col
                     break
             if not metric:
-                metric = "Sales"  # Changed to "Sales" to match the column name in default data
+                metric = "reviews"
                 st.warning(f"Metric '{metric}' used as default since 'sales' not found in the dataset.")
             group_column = entity.lower() if entity.lower() in df.columns else "SKU"
             if group_column not in df.columns:
