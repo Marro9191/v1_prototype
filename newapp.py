@@ -127,6 +127,8 @@ if "messages_shopify" not in st.session_state:
     st.session_state.messages_shopify = []
 if "df_insight" not in st.session_state:
     st.session_state.df_insight = pd.read_csv(io.StringIO(default_csv_data))
+if "file_uploaded" not in st.session_state:
+    st.session_state.file_uploaded = False
 
 # Display chat interface based on selected tab
 if menu == "Insight Conversation":
@@ -163,20 +165,20 @@ if menu == "Insight Conversation":
             unsafe_allow_html=True
         )
 
-        # File uploader
+        # File uploader with a flag to prevent continuous reruns
         uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
-        if uploaded_file is not None and "uploaded_file_processed" not in st.session_state:
+        if uploaded_file and not st.session_state.file_uploaded:
             df = pd.read_csv(uploaded_file)
             st.session_state.df_insight = df
             st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
             st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
-            st.session_state.uploaded_file_processed = True  # Flag to prevent reprocessing
+            st.session_state.file_uploaded = True  # Set flag to prevent reprocessing
+            st.rerun()  # Rerun once to update the display
 
         # Chat input
-        prompt = st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')")
-        if prompt and "last_prompt" not in st.session_state or st.session_state.last_prompt != prompt:
+        if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
             st.session_state.messages_insight.append({"role": "user", "content": prompt})
-            st.session_state.last_prompt = prompt  # Store the last prompt to avoid duplicates
+            st.rerun()  # Rerun to refresh the display with the new prompt
 
             # Load and process data
             df = st.session_state.df_insight
@@ -184,7 +186,7 @@ if menu == "Insight Conversation":
             if df['date'].isna().all():
                 st.warning("No valid dates found in the 'date' column. Please ensure dates are in DD/MM/YYYY format.")
                 st.stop()
-            st.write(f"Loaded {len(df)} rows from {'uploaded CSV' if 'uploaded_file' in locals() else 'default data'}.")  # Debug row count
+            st.write(f"Loaded {len(df)} rows from {'uploaded CSV' if st.session_state.file_uploaded else 'default data'}.")  # Debug row count
             df['month_year'] = df['date'].dt.strftime('%B %Y')
             df['category'] = df['category'].str.lower().replace("tootbrush", "toothbrush")
 
@@ -416,9 +418,10 @@ elif menu == "Shopify Catalog Analysis":
             elif isinstance(message["content"], go.Figure):
                 st.plotly_chart(message["content"])
 
-    # Chat input for Shopify Catalog Analysis (already at the bottom by default)
+    # Chat input for Shopify Catalog Analysis
     if prompt := st.chat_input("Ask me about your Shopify catalog! (e.g., 'Which products are out of stock, and how many?')"):
         st.session_state.messages_shopify.append({"role": "user", "content": prompt})
+        st.rerun()  # Rerun to refresh the display with the new prompt
 
         with st.spinner("Fetching Shopify catalog data via GraphQL..."):
             df = fetch_shopify_products()
