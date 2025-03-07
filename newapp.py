@@ -142,11 +142,12 @@ st.markdown(
         flex-direction: column;
         min-height: 100vh;
     }
-    /* Main content area should be scrollable */
+    /* Main content area should be scrollable with enough padding for footer */
     .content {
         flex: 1;
         overflow-y: auto;
-        padding-bottom: 120px; /* Ensure space for the fixed footer */
+        padding-bottom: 150px; /* Increased padding to ensure footer visibility */
+        box-sizing: border-box;
     }
     /* Fixed footer at the bottom */
     .footer {
@@ -157,10 +158,15 @@ st.markdown(
         background-color: #f0f2f6;
         padding: 10px;
         z-index: 1000;
+        width: 100%;
     }
     /* Reduced space between uploader and chat input */
     .stFileUploader {
         margin-bottom: 5px;
+    }
+    /* Ensure chat input and uploader stay within footer */
+    .stChatInput {
+        margin-top: 0;
     }
     </style>
     """,
