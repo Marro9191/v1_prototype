@@ -243,7 +243,7 @@ if menu == "Insight Conversation":
                 df_filtered = df if category_filter is None else df[df['category'] == category_filter]
 
                 # Process the query
-                if "total number of reviews per month" in prompt.lower():
+                if "reviews per month" in prompt.lower():
                     monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
                     openai_data = monthly_reviews.to_string()
                     messages = [
@@ -300,7 +300,7 @@ if menu == "Insight Conversation":
                     st.session_state.messages_insight.append({"role": "assistant", "content": fig})
                     st.rerun()
 
-                elif "compared to" in prompt.lower() and "reviews" in prompt.lower():
+                elif "compare reviews" in prompt.lower() and any(month in prompt.lower() for month in ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]):
                     months = re.findall(r'\b(January|February|March|April|May|June|July|August|September|October|November|December)\b', prompt, re.IGNORECASE)
                     if len(months) >= 2:
                         month1, month2 = months[0], months[1]
@@ -400,16 +400,9 @@ if menu == "Insight Conversation":
                     st.session_state.messages_insight.append({"role": "assistant", "content": fig})
                     st.rerun()
 
-                elif any(word in prompt.lower() for word in ["most", "least"]):
+                elif any(word in prompt.lower() for word in ["most", "least"]) and any(metric in prompt.lower() for metric in ["reviews", "sales", "sale"]):
                     entity = "SKU" if "sku" in prompt.lower() else "product"
-                    metric = None
-                    for col in df.columns:
-                        if any(keyword in col.lower() for keyword in ["sales", "sale"]):
-                            metric = col
-                            break
-                    if not metric:
-                        metric = "reviews"
-                        st.session_state.messages_insight.append({"role": "assistant", "content": f"Metric '{metric}' used as default since 'sales' not found in the dataset."})
+                    metric = next((col for col in ["sales", "reviews"] if col in prompt.lower()), "reviews")
                     group_column = entity.lower() if entity.lower() in df.columns else "SKU"
                     if group_column not in df.columns:
                         st.session_state.messages_insight.append({"role": "assistant", "content": f"Grouping column '{group_column}' not found in the dataset."})
@@ -446,7 +439,11 @@ if menu == "Insight Conversation":
                     messages = [
                         {
                             "role": "user",
-                            "content": f"Provide a friendly response. I don’t fully understand your question about the data. Could you please ask about reviews, sales, or specific months? For example, 'What were the total number of reviews per month?' or 'Which SKU had the most sales?' Or upload a CSV file to start!"
+                            "content": (
+                                f"Based on the provided data, please interpret and respond to the following query in a friendly and concise manner: {prompt}. "
+                                f"If the query is unclear, suggest alternatives such as 'What were the total number of reviews per month?', "
+                                f"'Compare reviews for January and February', or 'Which SKU had the most sales?'"
+                            )
                         }
                     ]
                     response = client.chat.completions.create(model="gpt-4o", messages=messages)
