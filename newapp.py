@@ -169,10 +169,11 @@ if menu == "Insight Conversation":
     with response_container:
         if not st.session_state.messages_insight:
             st.write("Responses will appear here.")
-        for message in st.session_state.messages_insight:
+        for idx, message in enumerate(st.session_state.messages_insight):
             with st.chat_message(message["role"]):
                 if isinstance(message["content"], go.Figure):
-                    st.plotly_chart(message["content"])
+                    # Use a unique key for each Plotly chart based on its index
+                    st.plotly_chart(message["content"], key=f"plotly_chart_{idx}")
                 elif message["content"].startswith("### Analysis Results\n"):
                     st.write("### Analysis Results")
                     st.markdown(message["content"].split('\n', 1)[1], unsafe_allow_html=True)
@@ -397,9 +398,13 @@ elif menu == "Shopify Catalog Analysis":
     st.write("Chat with me about your Shopify catalog! Ask about stock levels or product updates.")
 
     # Display chat messages for Shopify Catalog Analysis
-    for message in st.session_state.messages_shopify:
+    for idx, message in enumerate(st.session_state.messages_shopify):
         with st.chat_message(message["role"]):
-            st.write(message["content"])
+            if isinstance(message["content"], go.Figure):
+                # Use a unique key for each Plotly chart in Shopify section
+                st.plotly_chart(message["content"], key=f"shopify_plotly_chart_{idx}")
+            else:
+                st.write(message["content"])
 
     # Chat input for Shopify Catalog Analysis
     if prompt := st.chat_input("Ask me about your Shopify catalog! (e.g., 'Which products are out of stock, and how many?')"):
@@ -458,8 +463,7 @@ elif menu == "Shopify Catalog Analysis":
                         width=700,
                         showlegend=True
                     )
-                    with st.chat_message("assistant"):
-                        st.plotly_chart(fig)
+                    st.session_state.messages_shopify.append({"role": "assistant", "content": fig})
 
                 else:
                     messages = [
@@ -491,8 +495,7 @@ elif menu == "Shopify Catalog Analysis":
                         width=700,
                         showlegend=True
                     )
-                    with st.chat_message("assistant"):
-                        st.plotly_chart(fig)
+                    st.session_state.messages_shopify.append({"role": "assistant", "content": fig})
 
             elif "last month" in prompt.lower() and "this month" in prompt.lower():
                 current_date = datetime.now()
@@ -540,8 +543,7 @@ elif menu == "Shopify Catalog Analysis":
                     height=500,
                     width=700
                 )
-                with st.chat_message("assistant"):
-                    st.plotly_chart(fig)
+                st.session_state.messages_shopify.append({"role": "assistant", "content": fig})
 
             else:
                 messages = [
@@ -558,4 +560,3 @@ elif menu == "Shopify Catalog Analysis":
                 st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                 with st.chat_message("assistant"):
                     st.write(response.choices[0].message.content)
-    st.markdown('</div>', unsafe_allow_html=True)
