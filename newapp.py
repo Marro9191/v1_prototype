@@ -133,20 +133,19 @@ if menu == "Insight Conversation":
     st.title("📄 Comcore Prototype v1")
     st.write("Chat with me about your data! Upload a CSV or ask about reviews, sales, or specific months. Default data is pre-loaded.")
 
-    # Display chat messages and analysis results first
+    # Render all chat messages and analysis results in the main content area
     for message in st.session_state.messages_insight:
         with st.chat_message(message["role"]):
-            st.write(message["content"])
-            # Check if the message content is a Plotly figure (stored in session state)
-            if isinstance(message["content"], go.Figure):
+            if isinstance(message["content"], str):
+                st.write(message["content"])
+            elif isinstance(message["content"], go.Figure):
                 st.plotly_chart(message["content"])
 
     # Add spacing to push the input section to the bottom
     st.markdown("<div style='height: 50vh;'></div>", unsafe_allow_html=True)
 
-    # Container for file uploader and chat input at the bottom
+    # Fixed container for file uploader and chat input at the bottom
     with st.container():
-        # Custom CSS to fix the container at the bottom
         st.markdown(
             """
             <style>
@@ -157,6 +156,7 @@ if menu == "Insight Conversation":
                 background: white;
                 padding: 10px;
                 z-index: 100;
+                box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
             }
             </style>
             """,
@@ -169,19 +169,15 @@ if menu == "Insight Conversation":
             df = pd.read_csv(uploaded_file)
             st.session_state.df_insight = df
             st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
-            with st.chat_message("user"):
-                st.write(f"Uploaded CSV file: {uploaded_file.name}")
             st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
-            with st.chat_message("assistant"):
-                st.write("Great! I’ve loaded your CSV file. Feel free to ask questions about it!")
+            st.rerun()  # Rerun to refresh the display with new messages
 
         # Chat input
         if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
             st.session_state.messages_insight.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.write(prompt)
+            st.rerun()  # Rerun to refresh the display with the new prompt
 
-            # Load and process data
+            # Load and process data (moved outside chat input to ensure it runs after rerun)
             df = st.session_state.df_insight
             df['date'] = pd.to_datetime(df['date'], format='%d/%m/%Y', errors='coerce')
             if df['date'].isna().all():
@@ -414,16 +410,15 @@ elif menu == "Shopify Catalog Analysis":
     # Display chat messages for Shopify Catalog Analysis
     for message in st.session_state.messages_shopify:
         with st.chat_message(message["role"]):
-            st.write(message["content"])
-            # Check if the message content is a Plotly figure
-            if isinstance(message["content"], go.Figure):
+            if isinstance(message["content"], str):
+                st.write(message["content"])
+            elif isinstance(message["content"], go.Figure):
                 st.plotly_chart(message["content"])
 
     # Chat input for Shopify Catalog Analysis (already at the bottom by default)
     if prompt := st.chat_input("Ask me about your Shopify catalog! (e.g., 'Which products are out of stock, and how many?')"):
         st.session_state.messages_shopify.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.write(prompt)
+        st.rerun()  # Rerun to refresh the display with the new prompt
 
         with st.spinner("Fetching Shopify catalog data via GraphQL..."):
             df = fetch_shopify_products()
