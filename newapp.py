@@ -22,7 +22,10 @@ if "messages_insight" not in st.session_state:
 if "messages_shopify" not in st.session_state:
     st.session_state.messages_shopify = []
 if "df_insight" not in st.session_state:
-    st.session_state.df_insight = pd.read_csv(io.StringIO(default_csv_data))
+    # Load default data and normalize column names to lowercase
+    df = pd.read_csv(io.StringIO(default_csv_data))
+    df.columns = df.columns.str.lower()  # Normalize column names
+    st.session_state.df_insight = df
 if "last_processed_prompt_insight" not in st.session_state:
     st.session_state.last_processed_prompt_insight = None
 if "last_processed_prompt_shopify" not in st.session_state:
@@ -228,6 +231,7 @@ if menu == "Insight Conversation":
         uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
         if uploaded_file is not None:
             df = pd.read_csv(uploaded_file)
+            df.columns = df.columns.str.lower()  # Normalize column names
             st.session_state.df_insight = df
             # No success message appended as per request
 
@@ -254,6 +258,7 @@ if menu == "Insight Conversation":
         uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
         if uploaded_file is not None:
             df = pd.read_csv(uploaded_file)
+            df.columns = df.columns.str.lower()  # Normalize column names
             st.session_state.df_insight = df
             # No success message appended as per request
     if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
@@ -437,9 +442,10 @@ if menu == "Insight Conversation":
                         st.rerun()
 
                 elif any(word in prompt.lower() for word in ["most", "least"]) and any(metric in prompt.lower() for metric in ["reviews", "sales", "sale"]):
-                    entity = "SKU" if "sku" in prompt.lower() else "product"
-                    metric = next((col for col in ["sales", "reviews"] if col in prompt.lower()), "reviews")
-                    group_column = entity.lower() if entity.lower() in df.columns else "SKU"
+                    entity = "sku" if "sku" in prompt.lower() else "product"
+                    # Map the metric to the correct column name (normalized to lowercase)
+                    metric = "sales" if "sale" in prompt.lower() or "sales" in prompt.lower() else "reviews"
+                    group_column = entity.lower()
                     if group_column not in df.columns:
                         st.session_state.messages_insight.append({"role": "assistant", "content": f"Grouping column '{group_column}' not found in the dataset."})
                     else:
