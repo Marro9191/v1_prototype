@@ -142,7 +142,8 @@ st.markdown(
         min-height: 100vh;
     }
     .content {
-        flex: 1 0 auto;
+        flex: 1;
+        min-height: calc(100vh - 150px);  /* Ensure content takes up enough space */
         padding-bottom: 150px;  /* Space for fixed footer */
     }
     .footer {
@@ -156,15 +157,6 @@ st.markdown(
     }
     .stFileUploader {
         margin-bottom: 5px;  /* Reduced space between uploader and chat input */
-    }
-    /* Ensure footer stays at bottom with enough content */
-    .stApp > div {
-        display: flex;
-        flex-direction: column;
-        min-height: 100vh;
-    }
-    .stApp > div > .content {
-        flex: 1;
     }
     </style>
     """,
