@@ -186,7 +186,7 @@ if menu == "Insight Conversation":
     if uploaded_file is not None:
         df = pd.read_csv(uploaded_file)
         st.session_state.df_insight = df
-        # Removed the "Great! I've loaded..." message as per request
+        # No success message appended as per request
 
     if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
         # Only append user prompt if it's not a duplicate
@@ -403,7 +403,7 @@ if menu == "Insight Conversation":
                     st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
     st.markdown('</div>', unsafe_allow_html=True)
 
-# Shopify Catalog Analysis (unchanged with similar adjustments)
+# Shopify Catalog Analysis (corrected syntax)
 elif menu == "Shopify Catalog Analysis":
     st.title("🛒 Shopify Catalog Analysis")
     st.write("Chat with me about your Shopify catalog! Ask about stock levels or product updates.")
@@ -456,7 +456,7 @@ elif menu == "Shopify Catalog Analysis":
                         response = client.chat.completions.create(model="gpt-4o", messages=messages)
                         st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                         with st.chat_message("assistant"):
-                            st.write(response.choices[0].message.content)
+                            st.write(response.choices[0].message.content)  # Fixed syntax here
 
                         fig = go.Figure(data=[
                             go.Pie(
@@ -489,7 +489,7 @@ elif menu == "Shopify Catalog Analysis":
                         response = client.chat.completions.create(model="gpt-4o", messages=messages)
                         st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                         with st.chat_message("assistant"):
-                            st.write(response.choices[0].message.content)
+                            st.write(response.choices[0].message.content)  # Fixed syntax here
 
                         fig = go.Figure(data=[
                             go.Pie(
@@ -543,7 +543,7 @@ elif menu == "Shopify Catalog Analysis":
                     response = client.chat.completions.create(model="gpt-4o", messages=messages)
                     st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                     with st.chat_message("assistant"):
-                        st.write(response.choices[0].message.content)
+                        st.write(response.choices[0].message.content)  # Fixed syntax here
 
                     fig = go.Figure(data=[
                         go.Bar(x=['Last Month', 'This Month'], y=[last_month_count, this_month_count], marker_color=['#FF6B6B', '#4ECDC4'])
@@ -572,5 +572,5 @@ elif menu == "Shopify Catalog Analysis":
                     response = client.chat.completions.create(model="gpt-4o", messages=messages)
                     st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                     with st.chat_message("assistant"):
-                        st.write(response.choices[0].message.content})
+                        st.write(response.choices[0].message.content)  # Fixed syntax here
     st.markdown('</div>', unsafe_allow_html=True)
