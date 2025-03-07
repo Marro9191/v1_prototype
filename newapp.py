@@ -207,11 +207,9 @@ if menu == "CSV Analysis":
             with st.chat_message(message["role"]):
                 if isinstance(message["content"], go.Figure):
                     st.plotly_chart(message["content"], key=f"plotly_chart_{idx}")
-                elif isinstance(message["content"], str) and message["content"].startswith("### Analysis Results\n"):
-                    # Remove the "Analysis Results" title and display content directly
-                    st.markdown(message["content"].split('\n', 1)[1], unsafe_allow_html=True)
                 else:
-                    st.write(message["content"])
+                    # Handle all string content (including HTML tables) directly
+                    st.markdown(message["content"], unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
     # Fixed footer (shown after first response)
@@ -301,7 +299,7 @@ if menu == "CSV Analysis":
                             barmode='group',
                             showlegend=True
                         )
-                        st.session_state.messages_csv.append({"role": "assistant", "content": fig})  # Fixed syntax here
+                        st.session_state.messages_csv.append({"role": "assistant", "content": fig})
 
                         # Move uploader to bottom after first assistant response
                         assistant_messages = [msg for msg in st.session_state.messages_csv if msg["role"] == "assistant"]
@@ -344,7 +342,7 @@ if menu == "CSV Analysis":
                                 height=500,
                                 width=700
                             )
-                            st.session_state.messages_csv.append({"role": "assistant", "content": fig})  # Fixed syntax here
+                            st.session_state.messages_csv.append({"role": "assistant", "content": fig})
 
                             # Move uploader to bottom after first assistant response
                             assistant_messages = [msg for msg in st.session_state.messages_csv if msg["role"] == "assistant"]
@@ -399,7 +397,7 @@ if menu == "CSV Analysis":
                             height=500,
                             width=700
                         )
-                        st.session_state.messages_csv.append({"role": "assistant", "content": fig})  # Fixed syntax here
+                        st.session_state.messages_csv.append({"role": "assistant", "content": fig})
 
                         # Move uploader to bottom after first assistant response
                         assistant_messages = [msg for msg in st.session_state.messages_csv if msg["role"] == "assistant"]
