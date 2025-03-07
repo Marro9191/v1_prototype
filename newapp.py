@@ -155,14 +155,14 @@ st.markdown(
         z-index: 1000;
     }
     .stFileUploader {
-        margin-bottom: 10px;  /* Space between uploader and chat input */
+        margin-bottom: 5px;  /* Reduced space between uploader and chat input */
     }
     </style>
     """,
     unsafe_allow_html=True
 )
 
-# Insight Conversation tab (unchanged)
+# Insight Conversation tab
 if menu == "Insight Conversation":
     st.title("📄 Comcore Prototype v1")
     st.write("Chat with me about your data! Upload a CSV or ask about reviews, sales, or specific months. Default data is pre-loaded.")
@@ -404,7 +404,7 @@ if menu == "Insight Conversation":
                     st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
-# Shopify Catalog Analysis (updated for professional tone)
+# Shopify Catalog Analysis (unchanged)
 elif menu == "Shopify Catalog Analysis":
     st.title("🛒 Shopify Catalog Analysis")
     st.write("Analyze your Shopify catalog data. Query stock levels, product updates, or other metrics as needed.")
