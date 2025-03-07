@@ -17,14 +17,14 @@ except KeyError:
     st.stop()
 
 # Initialize session state at the top to avoid TypeError
-if "messages_insight" not in st.session_state:
-    st.session_state.messages_insight = []
+if "messages_csv" not in st.session_state:
+    st.session_state.messages_csv = []
 if "messages_shopify" not in st.session_state:
     st.session_state.messages_shopify = []
-if "df_insight" not in st.session_state:
-    st.session_state.df_insight = None  # Start with no data until uploaded
-if "last_processed_prompt_insight" not in st.session_state:
-    st.session_state.last_processed_prompt_insight = None
+if "df_csv" not in st.session_state:
+    st.session_state.df_csv = None  # Start with no data until uploaded
+if "last_processed_prompt_csv" not in st.session_state:
+    st.session_state.last_processed_prompt_csv = None
 if "last_processed_prompt_shopify" not in st.session_state:
     st.session_state.last_processed_prompt_shopify = None
 if "uploader_at_bottom" not in st.session_state:
@@ -181,34 +181,34 @@ def fetch_shopify_products():
 
 # Add sidebar with menu items
 st.sidebar.title("Navigation")
-menu = st.sidebar.radio("Menu", ["Insight Conversation", "Shopify Catalog Analysis"])
+menu = st.sidebar.radio("Menu", ["CSV Analysis", "Shopify Catalog Analysis"])
 
-# Insight Conversation tab
-if menu == "Insight Conversation":
-    st.title("📄 Comcore Prototype v1")
+# CSV Analysis tab
+if menu == "CSV Analysis":
+    st.title("📄 CSV Analysis")
     st.write("Chat with me about your data! Upload a CSV or ask about reviews, sales, or specific months. No default data is pre-loaded.")
 
     # File uploader at top by default
     if not st.session_state.uploader_at_bottom:
-        uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
+        uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="csv_uploader", help="Upload your data file to analyze.")
         if uploaded_file is not None:
             df = pd.read_csv(uploaded_file)
             df.columns = df.columns.str.lower()  # Normalize column names
-            st.session_state.df_insight = df
+            st.session_state.df_csv = df
             # No success message appended as per request
 
     # Response area with padding
     st.markdown('<div class="content">', unsafe_allow_html=True)
     response_container = st.container()
     with response_container:
-        if not st.session_state.messages_insight:
+        if not st.session_state.messages_csv:
             pass  # Removed "Responses will appear here."
-        for idx, message in enumerate(st.session_state.messages_insight):
+        for idx, message in enumerate(st.session_state.messages_csv):
             with st.chat_message(message["role"]):
                 if isinstance(message["content"], go.Figure):
                     st.plotly_chart(message["content"], key=f"plotly_chart_{idx}")
                 elif isinstance(message["content"], str) and message["content"].startswith("### Analysis Results\n"):
-                    st.write("### Analysis Results")
+                    # Remove the "Analysis Results" title and display content directly
                     st.markdown(message["content"].split('\n', 1)[1], unsafe_allow_html=True)
                 else:
                     st.write(message["content"])
@@ -217,30 +217,30 @@ if menu == "Insight Conversation":
     # Fixed footer (shown after first response)
     st.markdown('<div class="footer">', unsafe_allow_html=True)
     if st.session_state.uploader_at_bottom:
-        uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
+        uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="csv_uploader", help="Upload your data file to analyze.")
         if uploaded_file is not None:
             df = pd.read_csv(uploaded_file)
             df.columns = df.columns.str.lower()  # Normalize column names
-            st.session_state.df_insight = df
+            st.session_state.df_csv = df
             # No success message appended as per request
     if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
         # Append user prompt
-        st.session_state.messages_insight.append({"role": "user", "content": prompt})
+        st.session_state.messages_csv.append({"role": "user", "content": prompt})
 
         # Load and process data
-        df = st.session_state.df_insight
+        df = st.session_state.df_csv
         if df is None or df.empty:
-            st.session_state.messages_insight.append({"role": "assistant", "content": "No data available. Please upload a CSV file to analyze."})
+            st.session_state.messages_csv.append({"role": "assistant", "content": "No data available. Please upload a CSV file to analyze."})
             st.rerun()
         else:
             df['date'] = pd.to_datetime(df['date'], format='%d/%m/%Y', errors='coerce')
             if df['date'].isna().all():
-                st.session_state.messages_insight.append({"role": "assistant", "content": "No valid dates found in the 'date' column. Please ensure dates are in DD/MM/YYYY format."})
+                st.session_state.messages_csv.append({"role": "assistant", "content": "No valid dates found in the 'date' column. Please ensure dates are in DD/MM/YYYY format."})
                 st.rerun()
             else:
                 # Process the query only if it's different from the last processed prompt
-                if st.session_state.last_processed_prompt_insight != prompt:
-                    st.session_state.last_processed_prompt_insight = prompt
+                if st.session_state.last_processed_prompt_csv != prompt:
+                    st.session_state.last_processed_prompt_csv = prompt
 
                     df['month_year'] = df['date'].dt.strftime('%B %Y')
                     df['category'] = df['category'].str.lower().replace("tootbrush", "toothbrush")
@@ -267,7 +267,7 @@ if menu == "Insight Conversation":
                             }
                         ]
                         response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                        st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
+                        st.session_state.messages_csv.append({"role": "assistant", "content": response.choices[0].message.content})
 
                         monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
                         seen = set()
@@ -278,7 +278,7 @@ if menu == "Insight Conversation":
                                 unique_results.append(row)
                                 seen.add(key)
                         monthly_reviews = pd.DataFrame(unique_results)
-                        st.session_state.messages_insight.append({"role": "assistant", "content": "### Analysis Results\n" + monthly_reviews.style.format({'reviews': '{:,.0f}'}).to_html()})
+                        st.session_state.messages_csv.append({"role": "assistant", "content": monthly_reviews.style.format({'reviews': '{:,.0f}'}).to_html()})  # Removed title
 
                         colors = {'toothbrush': '#FF6B6B', 'hygiene': '#4ECDC4'}
                         data_traces = []
@@ -301,10 +301,10 @@ if menu == "Insight Conversation":
                             barmode='group',
                             showlegend=True
                         )
-                        st.session_state.messages_insight.append({"role": "assistant", "content": fig})  # Fixed syntax here
+                        st.session_state.messages_csv.append({"role": "assistant", "content": fig})  # Fixed syntax here
 
                         # Move uploader to bottom after first assistant response
-                        assistant_messages = [msg for msg in st.session_state.messages_insight if msg["role"] == "assistant"]
+                        assistant_messages = [msg for msg in st.session_state.messages_csv if msg["role"] == "assistant"]
                         if len(assistant_messages) >= 1 and not st.session_state.uploader_at_bottom:
                             st.session_state.uploader_at_bottom = True
                             st.rerun()
@@ -330,9 +330,9 @@ if menu == "Insight Conversation":
                                 }
                             ]
                             response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                            st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
+                            st.session_state.messages_csv.append({"role": "assistant", "content": response.choices[0].message.content})
 
-                            st.session_state.messages_insight.append({"role": "assistant", "content": f"### Analysis Results\n{month1} 2025: {month1_reviews} reviews\n{month2} 2025: {month2_reviews} reviews"})
+                            st.session_state.messages_csv.append({"role": "assistant", "content": f"{month1} 2025: {month1_reviews} reviews\n{month2} 2025: {month2_reviews} reviews"})  # Removed title
 
                             fig = go.Figure(data=[
                                 go.Bar(x=[month1 + " 2025", month2 + " 2025"], y=[month1_reviews, month2_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
@@ -344,10 +344,10 @@ if menu == "Insight Conversation":
                                 height=500,
                                 width=700
                             )
-                            st.session_state.messages_insight.append({"role": "assistant", "content": fig})  # Fixed syntax here
+                            st.session_state.messages_csv.append({"role": "assistant", "content": fig})  # Fixed syntax here
 
                             # Move uploader to bottom after first assistant response
-                            assistant_messages = [msg for msg in st.session_state.messages_insight if msg["role"] == "assistant"]
+                            assistant_messages = [msg for msg in st.session_state.messages_csv if msg["role"] == "assistant"]
                             if len(assistant_messages) >= 1 and not st.session_state.uploader_at_bottom:
                                 st.session_state.uploader_at_bottom = True
                                 st.rerun()
@@ -385,9 +385,9 @@ if menu == "Insight Conversation":
                             }
                         ]
                         response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                        st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
+                        st.session_state.messages_csv.append({"role": "assistant", "content": response.choices[0].message.content})
 
-                        st.session_state.messages_insight.append({"role": "assistant", "content": f"### Analysis Results\nThis Month: {this_month_reviews} reviews\nLast Month: {last_month_reviews} reviews"})
+                        st.session_state.messages_csv.append({"role": "assistant", "content": f"This Month: {this_month_reviews} reviews\nLast Month: {last_month_reviews} reviews"})  # Removed title
 
                         fig = go.Figure(data=[
                             go.Bar(x=['Last Month', 'This Month'], y=[last_month_reviews, this_month_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
@@ -399,10 +399,10 @@ if menu == "Insight Conversation":
                             height=500,
                             width=700
                         )
-                        st.session_state.messages_insight.append({"role": "assistant", "content": fig})  # Fixed syntax here
+                        st.session_state.messages_csv.append({"role": "assistant", "content": fig})  # Fixed syntax here
 
                         # Move uploader to bottom after first assistant response
-                        assistant_messages = [msg for msg in st.session_state.messages_insight if msg["role"] == "assistant"]
+                        assistant_messages = [msg for msg in st.session_state.messages_csv if msg["role"] == "assistant"]
                         if len(assistant_messages) >= 1 and not st.session_state.uploader_at_bottom:
                             st.session_state.uploader_at_bottom = True
                             st.rerun()
@@ -413,15 +413,15 @@ if menu == "Insight Conversation":
                         metric = "sales" if "sale" in prompt.lower() or "sales" in prompt.lower() else "reviews"
                         group_column = entity
                         if group_column not in df.columns:
-                            st.session_state.messages_insight.append({"role": "assistant", "content": f"Grouping column '{group_column}' not found in the dataset."})
+                            st.session_state.messages_csv.append({"role": "assistant", "content": f"Grouping column '{group_column}' not found in the dataset."})
                         else:
                             df['month_year'] = df['date'].dt.strftime('%B %Y')
                             entity_metrics = df.groupby(['month_year', group_column])[metric].sum().reset_index()
 
                             if entity_metrics.empty or entity_metrics[metric].isna().all():
-                                st.session_state.messages_insight.append({"role": "assistant", "content": f"No valid {metric} data available for {entity}s."})
+                                st.session_state.messages_csv.append({"role": "assistant", "content": f"No valid {metric} data available for {entity}s."})
                             else:
-                                result_text = "### Analysis Results\n"
+                                result_text = ""
                                 for month_year in entity_metrics['month_year'].unique():
                                     month_data = entity_metrics[entity_metrics['month_year'] == month_year]
                                     max_value = month_data[metric].max()
@@ -433,10 +433,10 @@ if menu == "Insight Conversation":
                                     least_entities_str = ", ".join(filter(None, map(str, least_entities))) if len(least_entities) > 1 else (str(least_entities[0]) if least_entities[0] else "None")
 
                                     result_text += f"{month_year}: Most {metric}: {most_entities_str} ({max_value}), Least {metric}: {least_entities_str} ({min_value if min_value > 0 else 0})\n"
-                                st.session_state.messages_insight.append({"role": "assistant", "content": result_text})
+                                st.session_state.messages_csv.append({"role": "assistant", "content": result_text})  # Removed title
 
                                 # Move uploader to bottom after first assistant response
-                                assistant_messages = [msg for msg in st.session_state.messages_insight if msg["role"] == "assistant"]
+                                assistant_messages = [msg for msg in st.session_state.messages_csv if msg["role"] == "assistant"]
                                 if len(assistant_messages) >= 1 and not st.session_state.uploader_at_bottom:
                                     st.session_state.uploader_at_bottom = True
                                     st.rerun()
@@ -453,10 +453,10 @@ if menu == "Insight Conversation":
                             }
                         ]
                         response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                        st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
+                        st.session_state.messages_csv.append({"role": "assistant", "content": response.choices[0].message.content})
 
                         # Move uploader to bottom after first assistant response
-                        assistant_messages = [msg for msg in st.session_state.messages_insight if msg["role"] == "assistant"]
+                        assistant_messages = [msg for msg in st.session_state.messages_csv if msg["role"] == "assistant"]
                         if len(assistant_messages) >= 1 and not st.session_state.uploader_at_bottom:
                             st.session_state.uploader_at_bottom = True
                             st.rerun()
