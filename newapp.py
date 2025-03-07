@@ -214,7 +214,7 @@ if menu == "Insight Conversation":
 
             # Process the query only if not already processed
             if "total number of reviews per month" in prompt.lower():
-                if not any(msg["content"].startswith("Hey!") and "reviews per month" in msg["content"].lower() for msg in st.session_state.messages_insight):
+                if not any(isinstance(msg["content"], str) and msg["content"].startswith("Hey!") and "reviews per month" in msg["content"].lower() for msg in st.session_state.messages_insight):
                     monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
                     openai_data = monthly_reviews.to_string()
                     messages = [
@@ -265,7 +265,7 @@ if menu == "Insight Conversation":
                     st.session_state.messages_insight.append({"role": "assistant", "content": fig})
 
             elif "compared to" in prompt.lower() and "reviews" in prompt.lower():
-                if not any("compared to" in msg["content"].lower() and "reviews" in msg["content"].lower() for msg in st.session_state.messages_insight):
+                if not any(isinstance(msg["content"], str) and "compared to" in msg["content"].lower() and "reviews" in msg["content"].lower() for msg in st.session_state.messages_insight):
                     months = re.findall(r'\b(January|February|March|April|May|June|July|August|September|October|November|December)\b', prompt, re.IGNORECASE)
                     if len(months) >= 2:
                         month1, month2 = months[0], months[1]
@@ -303,7 +303,7 @@ if menu == "Insight Conversation":
                         st.session_state.messages_insight.append({"role": "assistant", "content": fig})
 
             elif "reviews" in prompt.lower() and ("last month" in prompt.lower() or "this month" in prompt.lower()):
-                if not any("last month" in msg["content"].lower() or "this month" in msg["content"].lower() for msg in st.session_state.messages_insight):
+                if not any(isinstance(msg["content"], str) and ("last month" in msg["content"].lower() or "this month" in msg["content"].lower()) for msg in st.session_state.messages_insight):
                     current_date = datetime.now()
                     current_month = current_date.month
                     current_year = current_date.year
@@ -353,7 +353,7 @@ if menu == "Insight Conversation":
                     st.session_state.messages_insight.append({"role": "assistant", "content": fig})
 
             elif any(word in prompt.lower() for word in ["most", "least"]):
-                if not any("most" in msg["content"].lower() or "least" in msg["content"].lower() for msg in st.session_state.messages_insight):
+                if not any(isinstance(msg["content"], str) and ("most" in msg["content"].lower() or "least" in msg["content"].lower()) for msg in st.session_state.messages_insight):
                     entity = "SKU" if "sku" in prompt.lower() else "product"
                     metric = None
                     for col in df.columns:
@@ -388,11 +388,11 @@ if menu == "Insight Conversation":
                                 least_entities_str = ", ".join(filter(None, map(str, least_entities))) if len(least_entities) > 1 else (str(least_entities[0]) if least_entities[0] else "None")
 
                                 result_text += f"{month_year}: Most {metric}: {most_entities_str} ({max_value}), Least {metric}: {least_entities_str} ({min_value if min_value > 0 else 0})\n"
-                            if not any(msg["content"].startswith(result_text.split('\n')[0]) for msg in st.session_state.messages_insight):
+                            if not any(isinstance(msg["content"], str) and msg["content"].startswith(result_text.split('\n')[0]) for msg in st.session_state.messages_insight):
                                 st.session_state.messages_insight.append({"role": "assistant", "content": result_text})
 
             else:
-                if not any("I don’t fully understand" in msg["content"] for msg in st.session_state.messages_insight):
+                if not any(isinstance(msg["content"], str) and "I don’t fully understand" in msg["content"] for msg in st.session_state.messages_insight):
                     messages = [
                         {
                             "role": "user",
@@ -436,7 +436,7 @@ elif menu == "Shopify Catalog Analysis":
                 in_stock_count = len(df[df['inventory_quantity'] > 0])
 
                 if out_of_stock_count > 0:
-                    if not any(msg["content"].startswith(f"Hey there! We’ve got {out_of_stock_count}") for msg in st.session_state.messages_shopify):
+                    if not any(isinstance(msg["content"], str) and msg["content"].startswith(f"Hey there! We’ve got {out_of_stock_count}") for msg in st.session_state.messages_shopify):
                         out_of_stock_list = out_of_stock[['title', 'sku']].drop_duplicates().to_dict('records')
                         sample_products = out_of_stock_list[:3]
                         sample_text = "\n".join([f"{i+1}. {item['title']} (SKU: {item['sku']}) - 0 items in stock" for i, item in enumerate(sample_products)])
@@ -456,7 +456,7 @@ elif menu == "Shopify Catalog Analysis":
                         response = client.chat.completions.create(model="gpt-4o", messages=messages)
                         st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                         with st.chat_message("assistant"):
-                            st.write(response.choices[0].message.content)  # Fixed syntax here
+                            st.write(response.choices[0].message.content)
 
                         fig = go.Figure(data=[
                             go.Pie(
@@ -476,7 +476,7 @@ elif menu == "Shopify Catalog Analysis":
                         st.session_state.messages_shopify.append({"role": "assistant", "content": fig})
 
                 else:
-                    if not any(msg["content"].startswith("Hey there! Great news") for msg in st.session_state.messages_shopify):
+                    if not any(isinstance(msg["content"], str) and msg["content"].startswith("Hey there! Great news") for msg in st.session_state.messages_shopify):
                         messages = [
                             {
                                 "role": "user",
@@ -489,7 +489,7 @@ elif menu == "Shopify Catalog Analysis":
                         response = client.chat.completions.create(model="gpt-4o", messages=messages)
                         st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                         with st.chat_message("assistant"):
-                            st.write(response.choices[0].message.content)  # Fixed syntax here
+                            st.write(response.choices[0].message.content)
 
                         fig = go.Figure(data=[
                             go.Pie(
@@ -509,7 +509,7 @@ elif menu == "Shopify Catalog Analysis":
                         st.session_state.messages_shopify.append({"role": "assistant", "content": fig})
 
             elif "last month" in prompt.lower() and "this month" in prompt.lower():
-                if not any("last month" in msg["content"].lower() and "this month" in msg["content"].lower() for msg in st.session_state.messages_shopify):
+                if not any(isinstance(msg["content"], str) and "last month" in msg["content"].lower() and "this month" in msg["content"].lower() for msg in st.session_state.messages_shopify):
                     current_date = datetime.now()
                     current_month = current_date.month
                     current_year = current_date.year
@@ -543,7 +543,7 @@ elif menu == "Shopify Catalog Analysis":
                     response = client.chat.completions.create(model="gpt-4o", messages=messages)
                     st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                     with st.chat_message("assistant"):
-                        st.write(response.choices[0].message.content)  # Fixed syntax here
+                        st.write(response.choices[0].message.content)
 
                     fig = go.Figure(data=[
                         go.Bar(x=['Last Month', 'This Month'], y=[last_month_count, this_month_count], marker_color=['#FF6B6B', '#4ECDC4'])
@@ -558,7 +558,7 @@ elif menu == "Shopify Catalog Analysis":
                     st.session_state.messages_shopify.append({"role": "assistant", "content": fig})
 
             else:
-                if not any("You can ask me about stock levels" in msg["content"] for msg in st.session_state.messages_shopify):
+                if not any(isinstance(msg["content"], str) and "You can ask me about stock levels" in msg["content"] for msg in st.session_state.messages_shopify):
                     messages = [
                         {
                             "role": "user",
@@ -572,5 +572,5 @@ elif menu == "Shopify Catalog Analysis":
                     response = client.chat.completions.create(model="gpt-4o", messages=messages)
                     st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                     with st.chat_message("assistant"):
-                        st.write(response.choices[0].message.content)  # Fixed syntax here
+                        st.write(response.choices[0].message.content)
     st.markdown('</div>', unsafe_allow_html=True)
