@@ -172,7 +172,6 @@ if menu == "Insight Conversation":
         for idx, message in enumerate(st.session_state.messages_insight):
             with st.chat_message(message["role"]):
                 if isinstance(message["content"], go.Figure):
-                    # Use a unique key for each Plotly chart based on its index
                     st.plotly_chart(message["content"], key=f"plotly_chart_{idx}")
                 elif message["content"].startswith("### Analysis Results\n"):
                     st.write("### Analysis Results")
@@ -189,6 +188,7 @@ if menu == "Insight Conversation":
         st.session_state.df_insight = df
         st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
         st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
+        st.rerun()  # Force rerun to display the update immediately
 
     if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
         st.session_state.messages_insight.append({"role": "user", "content": prompt})
@@ -260,6 +260,7 @@ if menu == "Insight Conversation":
                     showlegend=True
                 )
                 st.session_state.messages_insight.append({"role": "assistant", "content": fig})
+                st.rerun()  # Force rerun to display the response and chart
 
             elif "compared to" in prompt.lower() and "reviews" in prompt.lower():
                 months = re.findall(r'\b(January|February|March|April|May|June|July|August|September|October|November|December)\b', prompt, re.IGNORECASE)
@@ -297,6 +298,7 @@ if menu == "Insight Conversation":
                         width=700
                     )
                     st.session_state.messages_insight.append({"role": "assistant", "content": fig})
+                    st.rerun()
 
             elif "reviews" in prompt.lower() and ("last month" in prompt.lower() or "this month" in prompt.lower()):
                 current_date = datetime.now()
@@ -346,6 +348,7 @@ if menu == "Insight Conversation":
                     width=700
                 )
                 st.session_state.messages_insight.append({"role": "assistant", "content": fig})
+                st.rerun()
 
             elif any(word in prompt.lower() for word in ["most", "least"]):
                 entity = "SKU" if "sku" in prompt.lower() else "product"
@@ -380,6 +383,7 @@ if menu == "Insight Conversation":
 
                             result_text += f"{month_year}: Most {metric}: {most_entities_str} ({max_value}), Least {metric}: {least_entities_str} ({min_value if min_value > 0 else 0})\n"
                         st.session_state.messages_insight.append({"role": "assistant", "content": result_text})
+                        st.rerun()
 
             else:
                 messages = [
@@ -390,6 +394,7 @@ if menu == "Insight Conversation":
                 ]
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
                 st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
+                st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
 # Shopify Catalog Analysis (unchanged)
@@ -401,7 +406,6 @@ elif menu == "Shopify Catalog Analysis":
     for idx, message in enumerate(st.session_state.messages_shopify):
         with st.chat_message(message["role"]):
             if isinstance(message["content"], go.Figure):
-                # Use a unique key for each Plotly chart in Shopify section
                 st.plotly_chart(message["content"], key=f"shopify_plotly_chart_{idx}")
             else:
                 st.write(message["content"])
@@ -464,6 +468,7 @@ elif menu == "Shopify Catalog Analysis":
                         showlegend=True
                     )
                     st.session_state.messages_shopify.append({"role": "assistant", "content": fig})
+                    st.rerun()
 
                 else:
                     messages = [
@@ -496,6 +501,7 @@ elif menu == "Shopify Catalog Analysis":
                         showlegend=True
                     )
                     st.session_state.messages_shopify.append({"role": "assistant", "content": fig})
+                    st.rerun()
 
             elif "last month" in prompt.lower() and "this month" in prompt.lower():
                 current_date = datetime.now()
@@ -544,6 +550,7 @@ elif menu == "Shopify Catalog Analysis":
                     width=700
                 )
                 st.session_state.messages_shopify.append({"role": "assistant", "content": fig})
+                st.rerun()
 
             else:
                 messages = [
@@ -558,5 +565,4 @@ elif menu == "Shopify Catalog Analysis":
                 ]
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
                 st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
-                with st.chat_message("assistant"):
-                    st.write(response.choices[0].message.content)
+                st.rerun()
