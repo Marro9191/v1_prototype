@@ -165,19 +165,20 @@ if menu == "Insight Conversation":
 
         # File uploader
         uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
-        if uploaded_file is not None:
+        if uploaded_file is not None and "uploaded_file_processed" not in st.session_state:
             df = pd.read_csv(uploaded_file)
             st.session_state.df_insight = df
             st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
             st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
-            st.rerun()  # Rerun to refresh the display with new messages
+            st.session_state.uploaded_file_processed = True  # Flag to prevent reprocessing
 
         # Chat input
-        if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
+        prompt = st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')")
+        if prompt and "last_prompt" not in st.session_state or st.session_state.last_prompt != prompt:
             st.session_state.messages_insight.append({"role": "user", "content": prompt})
-            st.rerun()  # Rerun to refresh the display with the new prompt
+            st.session_state.last_prompt = prompt  # Store the last prompt to avoid duplicates
 
-            # Load and process data (moved outside chat input to ensure it runs after rerun)
+            # Load and process data
             df = st.session_state.df_insight
             df['date'] = pd.to_datetime(df['date'], format='%d/%m/%Y', errors='coerce')
             if df['date'].isna().all():
@@ -418,7 +419,6 @@ elif menu == "Shopify Catalog Analysis":
     # Chat input for Shopify Catalog Analysis (already at the bottom by default)
     if prompt := st.chat_input("Ask me about your Shopify catalog! (e.g., 'Which products are out of stock, and how many?')"):
         st.session_state.messages_shopify.append({"role": "user", "content": prompt})
-        st.rerun()  # Rerun to refresh the display with the new prompt
 
         with st.spinner("Fetching Shopify catalog data via GraphQL..."):
             df = fetch_shopify_products()
