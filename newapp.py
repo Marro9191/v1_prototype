@@ -128,15 +128,77 @@ if "messages_shopify" not in st.session_state:
 if "df_insight" not in st.session_state:
     st.session_state.df_insight = pd.read_csv(io.StringIO(default_csv_data))
 
+# Custom CSS to enforce layout
+st.markdown(
+    """
+    <style>
+    .main-content {
+        padding-bottom: 160px; /* Space for the fixed input container */
+        z-index: 1;
+        min-height: 100vh; /* Ensure content takes full height */
+    }
+    .input-wrapper {
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        background-color: white !important;
+        padding: 10px !important;
+        z-index: 1003 !important;
+        border-top: 1px solid #ccc !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 0px !important; /* No gap between uploader and chat input */
+    }
+    .response-wrapper {
+        position: fixed !important;
+        bottom: 110px !important; /* Position above input-wrapper with some padding */
+        left: 0 !important;
+        right: 0 !important;
+        background-color: #fff3e6 !important; /* Light orange background for distinction */
+        padding: 10px !important;
+        z-index: 1002 !important;
+        max-height: 200px !important; /* Limit height to avoid overlap */
+        overflow-y: auto !important; /* Scroll if content exceeds height */
+    }
+    .stFileUploader {
+        margin-bottom: 0px !important; /* Remove space below uploader */
+        padding-bottom: 0px !important;
+    }
+    .stChatInput {
+        margin-top: 0px !important; /* Remove space above chat input */
+        padding-top: 0px !important;
+    }
+    /* Ensure main content stays above input wrapper */
+    .stApp {
+        overflow: auto !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 # Display chat interface based on selected tab
 if menu == "Insight Conversation":
     st.title("📄 Comcore Prototype v1")
     st.write("Chat with me about your data! Upload a CSV or ask about reviews, sales, or specific months. Default data is pre-loaded.")
 
-    # Display chat messages for Insight Conversation
-    for message in st.session_state.messages_insight:
-        with st.chat_message(message["role"]):
-            st.write(message["content"])
+    # Main container for historical chat messages (above response and input)
+    with st.container():
+        st.markdown('<div class="main-content">', unsafe_allow_html=True)
+        for message in st.session_state.messages_insight[:-1]:  # Exclude the latest response
+            with st.chat_message(message["role"]):
+                st.write(message["content"])
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # Container for the latest response and analysis (above input-wrapper)
+    with st.container():
+        st.markdown('<div class="response-wrapper">', unsafe_allow_html=True)
+        if st.session_state.messages_insight and st.session_state.messages_insight[-1]["role"] == "assistant":
+            latest_response = st.session_state.messages_insight[-1]
+            with st.chat_message(latest_response["role"]):
+                st.write(latest_response["content"])
+        st.markdown('</div>', unsafe_allow_html=True)
 
     # Input container at the bottom with CSS styling
     with st.container():
@@ -191,9 +253,10 @@ if menu == "Insight Conversation":
                     }
                 ]
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
+                response_message = response.choices[0].message.content
+                st.session_state.messages_insight.append({"role": "assistant", "content": response_message})
                 with st.chat_message("assistant"):
-                    st.write(response.choices[0].message.content)
+                    st.write(response_message)
 
                 monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
                 seen = set()
@@ -205,6 +268,8 @@ if menu == "Insight Conversation":
                         seen.add(key)
                 monthly_reviews = pd.DataFrame(unique_results)
 
+                analysis_message = f"### Analysis Results\n{monthly_reviews.to_string(index=False)}"
+                st.session_state.messages_insight.append({"role": "assistant", "content": analysis_message})
                 with st.chat_message("assistant"):
                     st.write("### Analysis Results")
                     st.table(monthly_reviews.style.format({'reviews': '{:,.0f}'}))
@@ -222,7 +287,7 @@ if menu == "Insight Conversation":
                     ))
                 fig = go.Figure(data=data_traces)
                 fig.update_layout(
-                    title=f"Total Reviews Per Month by {'Toothbrush' if category_filter == 'toothbrush' else 'Category'}",
+                    title=f"Total Reviews Per Month by {'Toothbrush' if category_filter == 'toothbrush' else 'All Categories'}",
                     xaxis_title="Month",
                     yaxis_title="Number of Reviews",
                     height=500,
@@ -230,6 +295,7 @@ if menu == "Insight Conversation":
                     barmode='group',
                     showlegend=True
                 )
+                st.session_state.messages_insight.append({"role": "assistant", "content": "Graph: Total Reviews Per Month"})
                 with st.chat_message("assistant"):
                     st.plotly_chart(fig)
 
@@ -256,10 +322,13 @@ if menu == "Insight Conversation":
                         }
                     ]
                     response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                    st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
+                    response_message = response.choices[0].message.content
+                    st.session_state.messages_insight.append({"role": "assistant", "content": response_message})
                     with st.chat_message("assistant"):
-                        st.write(response.choices[0].message.content)
+                        st.write(response_message)
 
+                    analysis_message = f"### Analysis Results\n{month1} 2025: {month1_reviews} reviews\n{month2} 2025: {month2_reviews} reviews"
+                    st.session_state.messages_insight.append({"role": "assistant", "content": analysis_message})
                     with st.chat_message("assistant"):
                         st.write("### Analysis Results")
                         st.write(f"{month1} 2025: {month1_reviews} reviews")
@@ -275,6 +344,7 @@ if menu == "Insight Conversation":
                         height=500,
                         width=700
                     )
+                    st.session_state.messages_insight.append({"role": "assistant", "content": "Graph: Reviews Comparison"})
                     with st.chat_message("assistant"):
                         st.plotly_chart(fig)
 
@@ -312,10 +382,13 @@ if menu == "Insight Conversation":
                     }
                 ]
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
+                response_message = response.choices[0].message.content
+                st.session_state.messages_insight.append({"role": "assistant", "content": response_message})
                 with st.chat_message("assistant"):
-                    st.write(response.choices[0].message.content)
+                    st.write(response_message)
 
+                analysis_message = f"### Analysis Results\nThis Month: {this_month_reviews} reviews\nLast Month: {last_month_reviews} reviews"
+                st.session_state.messages_insight.append({"role": "assistant", "content": analysis_message})
                 with st.chat_message("assistant"):
                     st.write("### Analysis Results")
                     st.write(f"This Month: {this_month_reviews} reviews")
@@ -331,6 +404,7 @@ if menu == "Insight Conversation":
                     height=500,
                     width=700
                 )
+                st.session_state.messages_insight.append({"role": "assistant", "content": "Graph: Reviews Comparison"})
                 with st.chat_message("assistant"):
                     st.plotly_chart(fig)
 
@@ -356,19 +430,25 @@ if menu == "Insight Conversation":
                     st.warning(f"No valid {metric} data available for {entity}s.")
                     st.stop()
 
+                analysis_results = []
+                for month_year in entity_metrics['month_year'].unique():
+                    month_data = entity_metrics[entity_metrics['month_year'] == month_year]
+                    max_value = month_data[metric].max()
+                    most_entities = month_data[month_data[metric] == max_value][group_column].tolist()
+                    most_entities_str = ", ".join(most_entities) if len(most_entities) > 1 else most_entities[0]
+
+                    min_value = month_data[month_data[metric] > 0][metric].min() if (month_data[metric] > 0).any() else 0
+                    least_entities = month_data[month_data[metric] == min_value][group_column].tolist() if min_value > 0 else [None]
+                    least_entities_str = ", ".join(filter(None, least_entities)) if len(least_entities) > 1 else (least_entities[0] if least_entities[0] else "None")
+
+                    analysis_results.append(f"{month_year}: Most {metric}: {most_entities_str} ({max_value}), Least {metric}: {least_entities_str} ({min_value if min_value > 0 else 0})")
+
+                analysis_message = f"### Analysis Results\n" + "\n".join(analysis_results)
+                st.session_state.messages_insight.append({"role": "assistant", "content": analysis_message})
                 with st.chat_message("assistant"):
                     st.write("### Analysis Results")
-                    for month_year in entity_metrics['month_year'].unique():
-                        month_data = entity_metrics[entity_metrics['month_year'] == month_year]
-                        max_value = month_data[metric].max()
-                        most_entities = month_data[month_data[metric] == max_value][group_column].tolist()
-                        most_entities_str = ", ".join(most_entities) if len(most_entities) > 1 else most_entities[0]
-
-                        min_value = month_data[month_data[metric] > 0][metric].min() if (month_data[metric] > 0).any() else 0
-                        least_entities = month_data[month_data[metric] == min_value][group_column].tolist() if min_value > 0 else [None]
-                        least_entities_str = ", ".join(filter(None, least_entities)) if len(least_entities) > 1 else (least_entities[0] if least_entities[0] else "None")
-
-                        st.write(f"{month_year}: Most {metric}: {most_entities_str} ({max_value}), Least {metric}: {least_entities_str} ({min_value if min_value > 0 else 0})")
+                    for result in analysis_results:
+                        st.write(result)
 
             else:
                 messages = [
@@ -378,9 +458,10 @@ if menu == "Insight Conversation":
                     }
                 ]
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
+                response_message = response.choices[0].message.content
+                st.session_state.messages_insight.append({"role": "assistant", "content": response_message})
                 with st.chat_message("assistant"):
-                    st.write(response.choices[0].message.content)
+                    st.write(response_message)
 
 elif menu == "Shopify Catalog Analysis":
     st.title("🛒 Shopify Catalog Analysis")
