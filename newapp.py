@@ -186,7 +186,7 @@ if menu == "Insight Conversation":
     with st.container():
         st.markdown('<div class="input-wrapper">', unsafe_allow_html=True)
         # Use columns to place uploader and chat input side by side
-        col1, col2 = st.columns(2)
+        col1, col2 = st.columns([1, 1])  # Equal width columns
         with col1:
             uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
             if uploaded_file is not None:
