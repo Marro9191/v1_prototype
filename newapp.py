@@ -16,6 +16,104 @@ except KeyError:
     st.error("Please add your OpenAI API key to `.streamlit/secrets.toml` under the key `openai.api_key`.")
     st.stop()
 
+# Initialize session state at the top to avoid TypeError
+if "messages_insight" not in st.session_state:
+    st.session_state.messages_insight = []
+if "messages_shopify" not in st.session_state:
+    st.session_state.messages_shopify = []
+if "df_insight" not in st.session_state:
+    st.session_state.df_insight = pd.read_csv(io.StringIO(default_csv_data))
+if "last_processed_prompt_insight" not in st.session_state:
+    st.session_state.last_processed_prompt_insight = None
+if "last_processed_prompt_shopify" not in st.session_state:
+    st.session_state.last_processed_prompt_shopify = None
+if "uploader_at_bottom" not in st.session_state:
+    st.session_state.uploader_at_bottom = False  # Track uploader position
+
+# Custom CSS with conditional padding based on uploader position
+if st.session_state.uploader_at_bottom:
+    st.markdown(
+        """
+        <style>
+        /* Ensure the app takes full height and uses Flexbox */
+        .stApp {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        /* Main content area should be scrollable with padding for footer */
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            padding-bottom: 120px; /* Space for fixed footer */
+            box-sizing: border-box;
+        }
+        /* Fixed footer at the bottom */
+        .footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: #f0f2f6;
+            padding: 10px;
+            z-index: 1000;
+            width: 100%;
+            display: block; /* Show footer when uploader is at bottom */
+        }
+        /* Reduced space between uploader and chat input */
+        .stFileUploader {
+            margin-bottom: 5px;
+        }
+        /* Ensure chat input aligns properly */
+        .stChatInput {
+            margin-top: 0;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+else:
+    st.markdown(
+        """
+        <style>
+        /* Ensure the app takes full height and uses Flexbox */
+        .stApp {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        /* Main content area should be scrollable with no padding */
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            padding-bottom: 0px; /* No padding when uploader is at top */
+            box-sizing: border-box;
+        }
+        /* Fixed footer at the bottom */
+        .footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: #f0f2f6;
+            padding: 10px;
+            z-index: 1000;
+            width: 100%;
+            display: none; /* Hidden by default, shown when uploader moves */
+        }
+        /* Reduced space between uploader and chat input */
+        .stFileUploader {
+            margin-bottom: 5px;
+        }
+        /* Ensure chat input aligns properly */
+        .stChatInput {
+            margin-top: 0;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
 # Function to fetch Shopify products using GraphQL
 def fetch_shopify_products():
     try:
@@ -120,65 +218,6 @@ default_csv_data = """﻿date,image,SKU,promo,category,product,performance,retur
 st.sidebar.title("Navigation")
 menu = st.sidebar.radio("Menu", ["Insight Conversation", "Shopify Catalog Analysis"])
 
-# Initialize chat history and data for each tab
-if "messages_insight" not in st.session_state:
-    st.session_state.messages_insight = []
-if "messages_shopify" not in st.session_state:
-    st.session_state.messages_shopify = []
-if "df_insight" not in st.session_state:
-    st.session_state.df_insight = pd.read_csv(io.StringIO(default_csv_data))
-if "last_processed_prompt_insight" not in st.session_state:
-    st.session_state.last_processed_prompt_insight = None
-if "last_processed_prompt_shopify" not in st.session_state:
-    st.session_state.last_processed_prompt_shopify = None
-if "uploader_at_bottom" not in st.session_state:
-    st.session_state.uploader_at_bottom = False  # Track uploader position
-
-# Custom CSS to manage layout with dynamic padding
-st.markdown(
-    """
-    <style>
-    /* Ensure the app takes full height and uses Flexbox */
-    .stApp {
-        display: flex;
-        flex-direction: column;
-        min-height: 100vh;
-    }
-    /* Main content area should be scrollable with dynamic padding */
-    .content {
-        flex: 1;
-        overflow-y: auto;
-        padding-bottom: %(padding_bottom)s; /* Dynamic padding based on uploader position */
-        box-sizing: border-box;
-    }
-    /* Fixed footer at the bottom */
-    .footer {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        background-color: #f0f2f6;
-        padding: 10px;
-        z-index: 1000;
-        width: 100%;
-        display: none; /* Hidden by default, shown when uploader moves */
-    }
-    .footer.active {
-        display: block; /* Show footer when uploader moves to bottom */
-    }
-    /* Reduced space between uploader and chat input */
-    .stFileUploader {
-        margin-bottom: 5px;
-    }
-    /* Ensure chat input aligns properly */
-    .stChatInput {
-        margin-top: 0;
-    }
-    </style>
-    """ % {"padding_bottom": "0px" if not st.session_state.uploader_at_bottom else "120px"},
-    unsafe_allow_html=True
-)
-
 # Insight Conversation tab
 if menu == "Insight Conversation":
     st.title("📄 Comcore Prototype v1")
@@ -259,12 +298,6 @@ if menu == "Insight Conversation":
                     response = client.chat.completions.create(model="gpt-4o", messages=messages)
                     st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
 
-                    # Move uploader to bottom after first assistant response
-                    assistant_messages = [msg for msg in st.session_state.messages_insight if msg["role"] == "assistant"]
-                    if len(assistant_messages) >= 1 and not st.session_state.uploader_at_bottom:
-                        st.session_state.uploader_at_bottom = True
-                        st.rerun()  # Rerun after all content is appended
-
                     monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
                     seen = set()
                     unique_results = []
@@ -298,7 +331,12 @@ if menu == "Insight Conversation":
                         showlegend=True
                     )
                     st.session_state.messages_insight.append({"role": "assistant", "content": fig})
-                    st.rerun()
+
+                    # Move uploader to bottom after first assistant response
+                    assistant_messages = [msg for msg in st.session_state.messages_insight if msg["role"] == "assistant"]
+                    if len(assistant_messages) >= 1 and not st.session_state.uploader_at_bottom:
+                        st.session_state.uploader_at_bottom = True
+                        st.rerun()
 
                 elif "compare reviews" in prompt.lower() and any(month in prompt.lower() for month in ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]):
                     months = re.findall(r'\b(January|February|March|April|May|June|July|August|September|October|November|December)\b', prompt, re.IGNORECASE)
@@ -323,12 +361,6 @@ if menu == "Insight Conversation":
                         response = client.chat.completions.create(model="gpt-4o", messages=messages)
                         st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
 
-                        # Move uploader to bottom after first assistant response
-                        assistant_messages = [msg for msg in st.session_state.messages_insight if msg["role"] == "assistant"]
-                        if len(assistant_messages) >= 1 and not st.session_state.uploader_at_bottom:
-                            st.session_state.uploader_at_bottom = True
-                            st.rerun()
-
                         st.session_state.messages_insight.append({"role": "assistant", "content": f"### Analysis Results\n{month1} 2025: {month1_reviews} reviews\n{month2} 2025: {month2_reviews} reviews"})
 
                         fig = go.Figure(data=[
@@ -342,7 +374,12 @@ if menu == "Insight Conversation":
                             width=700
                         )
                         st.session_state.messages_insight.append({"role": "assistant", "content": fig})
-                        st.rerun()
+
+                        # Move uploader to bottom after first assistant response
+                        assistant_messages = [msg for msg in st.session_state.messages_insight if msg["role"] == "assistant"]
+                        if len(assistant_messages) >= 1 and not st.session_state.uploader_at_bottom:
+                            st.session_state.uploader_at_bottom = True
+                            st.rerun()
 
                 elif "reviews" in prompt.lower() and ("last month" in prompt.lower() or "this month" in prompt.lower()):
                     current_date = datetime.now()
@@ -379,12 +416,6 @@ if menu == "Insight Conversation":
                     response = client.chat.completions.create(model="gpt-4o", messages=messages)
                     st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
 
-                    # Move uploader to bottom after first assistant response
-                    assistant_messages = [msg for msg in st.session_state.messages_insight if msg["role"] == "assistant"]
-                    if len(assistant_messages) >= 1 and not st.session_state.uploader_at_bottom:
-                        st.session_state.uploader_at_bottom = True
-                        st.rerun()
-
                     st.session_state.messages_insight.append({"role": "assistant", "content": f"### Analysis Results\nThis Month: {this_month_reviews} reviews\nLast Month: {last_month_reviews} reviews"})
 
                     fig = go.Figure(data=[
@@ -398,7 +429,12 @@ if menu == "Insight Conversation":
                         width=700
                     )
                     st.session_state.messages_insight.append({"role": "assistant", "content": fig})
-                    st.rerun()
+
+                    # Move uploader to bottom after first assistant response
+                    assistant_messages = [msg for msg in st.session_state.messages_insight if msg["role"] == "assistant"]
+                    if len(assistant_messages) >= 1 and not st.session_state.uploader_at_bottom:
+                        st.session_state.uploader_at_bottom = True
+                        st.rerun()
 
                 elif any(word in prompt.lower() for word in ["most", "least"]) and any(metric in prompt.lower() for metric in ["reviews", "sales", "sale"]):
                     entity = "SKU" if "sku" in prompt.lower() else "product"
@@ -433,8 +469,6 @@ if menu == "Insight Conversation":
                                 st.session_state.uploader_at_bottom = True
                                 st.rerun()
 
-                            st.rerun()
-
                 else:
                     messages = [
                         {
@@ -455,7 +489,6 @@ if menu == "Insight Conversation":
                         st.session_state.uploader_at_bottom = True
                         st.rerun()
 
-                    st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
 # Shopify Catalog Analysis
