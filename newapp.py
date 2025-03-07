@@ -209,7 +209,7 @@ if menu == "Insight Conversation":
                     st.write(message["content"])
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Fixed footer (shown after second response)
+    # Fixed footer (shown after first response)
     st.markdown('<div class="footer">', unsafe_allow_html=True)
     if st.session_state.uploader_at_bottom:
         uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
@@ -259,9 +259,9 @@ if menu == "Insight Conversation":
                     response = client.chat.completions.create(model="gpt-4o", messages=messages)
                     st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
 
-                    # Move uploader to bottom after second assistant response
+                    # Move uploader to bottom after first assistant response
                     assistant_messages = [msg for msg in st.session_state.messages_insight if msg["role"] == "assistant"]
-                    if len(assistant_messages) >= 2 and not st.session_state.uploader_at_bottom:
+                    if len(assistant_messages) >= 1 and not st.session_state.uploader_at_bottom:
                         st.session_state.uploader_at_bottom = True
                         st.rerun()
 
@@ -323,9 +323,9 @@ if menu == "Insight Conversation":
                         response = client.chat.completions.create(model="gpt-4o", messages=messages)
                         st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
 
-                        # Move uploader to bottom after second assistant response
+                        # Move uploader to bottom after first assistant response
                         assistant_messages = [msg for msg in st.session_state.messages_insight if msg["role"] == "assistant"]
-                        if len(assistant_messages) >= 2 and not st.session_state.uploader_at_bottom:
+                        if len(assistant_messages) >= 1 and not st.session_state.uploader_at_bottom:
                             st.session_state.uploader_at_bottom = True
                             st.rerun()
 
@@ -379,9 +379,9 @@ if menu == "Insight Conversation":
                     response = client.chat.completions.create(model="gpt-4o", messages=messages)
                     st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
 
-                    # Move uploader to bottom after second assistant response
+                    # Move uploader to bottom after first assistant response
                     assistant_messages = [msg for msg in st.session_state.messages_insight if msg["role"] == "assistant"]
-                    if len(assistant_messages) >= 2 and not st.session_state.uploader_at_bottom:
+                    if len(assistant_messages) >= 1 and not st.session_state.uploader_at_bottom:
                         st.session_state.uploader_at_bottom = True
                         st.rerun()
 
@@ -434,9 +434,9 @@ if menu == "Insight Conversation":
                                 result_text += f"{month_year}: Most {metric}: {most_entities_str} ({max_value}), Least {metric}: {least_entities_str} ({min_value if min_value > 0 else 0})\n"
                             st.session_state.messages_insight.append({"role": "assistant", "content": result_text})
 
-                            # Move uploader to bottom after second assistant response
+                            # Move uploader to bottom after first assistant response
                             assistant_messages = [msg for msg in st.session_state.messages_insight if msg["role"] == "assistant"]
-                            if len(assistant_messages) >= 2 and not st.session_state.uploader_at_bottom:
+                            if len(assistant_messages) >= 1 and not st.session_state.uploader_at_bottom:
                                 st.session_state.uploader_at_bottom = True
                                 st.rerun()
 
@@ -452,9 +452,9 @@ if menu == "Insight Conversation":
                     response = client.chat.completions.create(model="gpt-4o", messages=messages)
                     st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
 
-                    # Move uploader to bottom after second assistant response
+                    # Move uploader to bottom after first assistant response
                     assistant_messages = [msg for msg in st.session_state.messages_insight if msg["role"] == "assistant"]
-                    if len(assistant_messages) >= 2 and not st.session_state.uploader_at_bottom:
+                    if len(assistant_messages) >= 1 and not st.session_state.uploader_at_bottom:
                         st.session_state.uploader_at_bottom = True
                         st.rerun()
 
