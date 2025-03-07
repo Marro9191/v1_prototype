@@ -81,36 +81,76 @@ def fetch_shopify_products():
         st.error(f"Error fetching Shopify data: {str(e)}")
         return pd.DataFrame()
 
-# Initialize session state
-if "messages_insight" not in st.session_state:
-    st.session_state.messages_insight = []
-if "df_insight" not in st.session_state:
-    st.session_state.df_insight = pd.DataFrame()
-if "upload_message_added" not in st.session_state:
-    st.session_state.upload_message_added = {}
-if "last_uploaded_file" not in st.session_state:
-    st.session_state.last_uploaded_file = None
-if "messages_shopify" not in st.session_state:
-    st.session_state.messages_shopify = []
-
 # Callback function to handle file upload
 def handle_upload():
     uploaded_file = st.session_state.uploaded_file
-    if uploaded_file and uploaded_file.name not in st.session_state.upload_message_added:
+    if uploaded_file and uploaded_file.name not in st.session_state.get("uploaded_files", set()):
         df = pd.read_csv(uploaded_file)
         st.session_state.df_insight = df
-        st.session_state.upload_message_added[uploaded_file.name] = True
+        st.session_state.uploaded_files.add(uploaded_file.name)
         st.session_state.last_uploaded_file = uploaded_file.name
         st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
         st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
-        st.write(f"Debug: Uploaded DataFrame:\n{st.session_state.df_insight}")  # Debug output
+
+# Default CSV data as a string for Insight Conversation
+default_csv_data = """﻿date,image,SKU,promo,category,product,performance,returns,ratings,reviews,1st Page Rank,Sales
+20/01/2025,https://www.amazon.co.uk/Oral-B-Electric-Toothbrush-Travel-Designed/dp/B0DNG35BVM,1,12345,tootbrush,Jenny’s Electronic Toothbrush ,150,5,5,3000,100,1
+21/01/2025,,2,123123,hygiene,Competitor Toothbrush  ,120,3,5,200,5,2
+22/01/2025,,3,2334234,hygiene,Jenny’s Electronic Toothbrush,145,2,5,400,10,3
+23/01/2025,,4,656,hygiene,Jenny’s Electronic Toothbrush,145,2,5,30,30,4
+24/01/2025,,5,345345,hygiene,Jenny’s Electronic Toothbrush,145,2,5,10,12,5
+25/01/2025,,6,34535,hygiene,Jenny’s Electronic Toothbrush,145,2,5,11,39,6
+26/01/2025,,7,34555,hygiene,Jenny’s Electronic Toothbrush,145,2,5,5,100,7
+27/01/2025,,8,2342,hygiene,Jenny’s Electronic Toothbrush,145,2,5,5,121,8
+28/01/2025,,9,2345,hygiene,Jenny’s Electronic Toothbrush,145,2,5,5,2,9
+29/01/2025,,10,23422,hygiene,Jenny’s Electronic Toothbrush,145,2,5,5,34,10
+30/01/2025,,11,23422,hygiene,Jenny’s Electronic Toothbrush,145,2,3,5,39,11
+31/01/2025,,12,234324,hygiene,Jenny’s Electronic Toothbrush,145,2,3,5,55,12
+31/01/2025,,13,2423,hygiene,Jenny’s Electronic Toothbrush,145,2,3,5,56,13
+20/02/2025,,14,443,hygiene,Jenny’s Electronic Toothbrush,145,2,3,5,45,14
+21/02/2025,,15,35656,hygiene,Jenny’s Electronic Toothbrush,145,2,3,5,343,15
+22/02/2025,,16,56563,hygiene,Jenny’s Electronic Toothbrush,145,2,3,5,32,16
+23/02/2025,,17,345345,hygiene,Jenny’s Electronic Toothbrush,145,2,3,5,234,17
+24/02/2025,,18,6553,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,120,2234,18
+25/02/2025,,19,453,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,120,45,19
+26/02/2025,,20,34576,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,23,20
+27/02/2025,,21,4545,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,34,21
+28/02/2025,,22,4566,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,65,22
+01/03/2025,,23,353456,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,543,23
+02/03/2025,,24,656756,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,13,24
+03/03/2025,,25,754646,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,34,25
+04/03/2025,,26,345432,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,33,26
+05/03/2025,,27,34535,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,66,27
+06/03/2025,,28,4564,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,77,28
+07/03/2025,,29,4567,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,90,29
+08/03/2025,,30,45646,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,31,30
+09/03/2025,,31,445667,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,34,31
+10/03/2025,,32,2234,tootbrush,Jenny’s Electronic Toothbrush,145,2,3,60,31,32"""
+
+# Add sidebar with menu items
+st.sidebar.title("Navigation")
+menu = st.sidebar.radio("Menu", ["Insight Conversation", "Shopify Catalog Analysis"])
+
+# Initialize chat history and data for each tab
+if "messages_insight" not in st.session_state:
+    st.session_state.messages_insight = []
+if "messages_shopify" not in st.session_state:
+    st.session_state.messages_shopify = []
+if "df_insight" not in st.session_state:
+    st.session_state.df_insight = pd.read_csv(io.StringIO(default_csv_data))  # Preloaded data
+if "uploaded_files" not in st.session_state:
+    st.session_state.uploaded_files = set()  # Track unique file names
+if "last_uploaded_file" not in st.session_state:
+    st.session_state.last_uploaded_file = None  # Track the last uploaded file
+if "upload_message_added" not in st.session_state:
+    st.session_state.upload_message_added = {}  # Track which files have had upload messages
 
 # Custom CSS to enforce layout
 st.markdown(
     """
     <style>
     .main-content {
-        padding-bottom: 160px; /* Space for the fixed input container */
+        padding-bottom: 150px; /* Increased space for the fixed input container */
         z-index: 1;
         min-height: 100vh; /* Ensure content takes full height */
     }
@@ -121,7 +161,7 @@ st.markdown(
         right: 0 !important;
         background-color: white !important;
         padding: 10px !important;
-        z-index: 1003 !important;
+        z-index: 1002 !important;
         border-top: 1px solid #ccc !important;
         display: flex !important;
         flex-direction: column !important;
@@ -144,22 +184,10 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Add sidebar with menu items
-st.sidebar.title("Navigation")
-menu = st.sidebar.radio("Menu", ["Insight Conversation", "Shopify Catalog Analysis"])
-
 # Display chat interface based on selected tab
 if menu == "Insight Conversation":
     st.title("📄 Comcore Prototype v1")
-    st.write("Upload a CSV file and ask me about your data! (e.g., 'What were the total number of reviews per month?')")
-
-    # Manual reset button for debugging
-    if st.button("Reset Session"):
-        st.session_state.messages_insight = []
-        st.session_state.df_insight = pd.DataFrame()
-        st.session_state.upload_message_added = {}
-        st.session_state.last_uploaded_file = None
-        st.experimental_rerun()
+    st.write("Chat with me about your data! Upload a CSV or ask about reviews, sales, or specific months. Default data is pre-loaded.")
 
     # Main container for chat messages and responses (above input)
     with st.container():
@@ -168,88 +196,103 @@ if menu == "Insight Conversation":
         for message in st.session_state.messages_insight:
             with st.chat_message(message["role"]):
                 st.write(message["content"])
-        # Check if no data is loaded and prompt user
-        if st.session_state.df_insight.empty:
-            st.write("Please upload a CSV file to start analyzing your data.")
         st.markdown('</div>', unsafe_allow_html=True)
 
     # Input container at the bottom with CSS styling
     with st.container():
         st.markdown('<div class="input-wrapper">', unsafe_allow_html=True)
         # File uploader placed just above the chat input
-        st.file_uploader("Upload a CSV file", type=["csv"], key="uploaded_file", on_change=handle_upload, help="Upload your data file to analyze.")
-        
+        uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", on_change=handle_upload, args=(st.session_state,), help="Upload your data file to analyze.")
+        if uploaded_file and uploaded_file.name not in st.session_state.upload_message_added:
+            st.session_state.upload_message_added[uploaded_file.name] = True
+
         # Chat input for Insight Conversation, directly below the file uploader
         if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
-            # Append user prompt to chat history
             st.session_state.messages_insight.append({"role": "user", "content": prompt})
             with st.chat_message("user"):
                 st.write(prompt)
 
             # Load and process data
             df = st.session_state.df_insight
-            st.write(f"Debug: DataFrame before processing prompt:\n{df}")  # Debug output
-            if df.empty:
-                response_message = "Please upload a CSV file before asking questions about the data."
-                st.session_state.messages_insight.append({"role": "assistant", "content": response_message})
-                with st.chat_message("assistant"):
-                    st.write(response_message)
-                st.stop()
-
-            # Validate data and preprocess
             df['date'] = pd.to_datetime(df['date'], format='%d/%m/%Y', errors='coerce')
             if df['date'].isna().all():
                 st.warning("No valid dates found in the 'date' column. Please ensure dates are in DD/MM/YYYY format.")
                 st.stop()
-            st.write(f"Loaded {len(df)} rows from uploaded CSV.")  # Debug row count
+            st.write(f"Loaded {len(df)} rows from {'uploaded CSV' if st.session_state.last_uploaded_file else 'default data'}.")  # Debug row count
             df['month_year'] = df['date'].dt.strftime('%B %Y')
-            df['category'] = df['category'].str.lower()
+            df['category'] = df['category'].str.lower().replace("tootbrush", "toothbrush")
 
-            # Dynamic category filtering with debug
             category_filter = None
-            categories = df['category'].unique()
-            st.write(f"Debug: Available categories: {categories}")  # Debug output
-            for cat in categories:
-                if cat in prompt.lower():
-                    category_filter = cat
-                    st.write(f"Debug: Detected category filter: {category_filter}")
-                    break
-            if not category_filter and ("all categories" in prompt.lower() or "all" in prompt.lower()):
+            if "toothbrush" in prompt.lower():
+                category_filter = "toothbrush"
+            elif "all categories" in prompt.lower() or "all" in prompt.lower():
                 category_filter = None
-                st.write("Debug: Using all categories filter")
             df_filtered = df if category_filter is None else df[df['category'] == category_filter]
 
             # Process the query
-            if "total number of reviews" in prompt.lower() and "category" in prompt.lower():
+            if "total number of reviews per month" in prompt.lower():
                 if 'reviews' not in df.columns:
-                    st.warning("The 'reviews' column is not found in the uploaded data.")
+                    st.warning("The 'reviews' column is not found in the data.")
                     st.stop()
-                total_reviews = df_filtered['reviews'].sum()
-                st.write(f"Debug: Total reviews for {category_filter or 'all'} category: {total_reviews}")  # Debug output
+                monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
+                openai_data = monthly_reviews.to_string()
                 messages = [
                     {
                         "role": "user",
                         "content": (
-                            f"Provide a friendly and concise response about the total number of reviews for the {category_filter or 'all'} category. "
-                            f"The data shows a total of {total_reviews} reviews. Only use the provided number and do not hallucinate data. "
-                            f"Example: 'Hey! The total number of reviews for the {category_filter or 'all'} category is {total_reviews}!'"
+                            f"Based on the provided data, provide a friendly and concise summary of the total number of reviews per month for all categories. "
+                            f"Use the following grouped data with columns: {list(monthly_reviews.columns)}. "
+                            f"Data:\n{openai_data}\n\n---\n\n {prompt} (e.g., 'Hey! The data shows a peak in January 2025 with 3000 reviews for Toothbrush!')"
                         )
                     }
                 ]
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                response_message = response.choices[0].message.content
-                st.session_state.messages_insight.append({"role": "assistant", "content": response_message})
+                st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
                 with st.chat_message("assistant"):
-                    st.write(response_message)
+                    st.write(response.choices[0].message.content)
 
-                # Append analysis results to chat history
-                analysis_message = f"### Analysis Results\nTotal reviews for {category_filter.capitalize() if category_filter else 'All Categories'}: {total_reviews}"
-                st.session_state.messages_insight.append({"role": "assistant", "content": analysis_message})
+                monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
+                seen = set()
+                unique_results = []
+                for index, row in monthly_reviews.iterrows():
+                    key = (row['month_year'], row['category'])
+                    if key not in seen:
+                        unique_results.append(row)
+                        seen.add(key)
+                monthly_reviews = pd.DataFrame(unique_results)
+
                 with st.chat_message("assistant"):
                     st.write("### Analysis Results")
-                    st.write(f"Total reviews for {category_filter.capitalize() if category_filter else 'All Categories'}: {total_reviews}")
+                    st.table(monthly_reviews.style.format({'reviews': '{:,.0f}'}))
+
+                colors = {'toothbrush': '#FF6B6B', 'hygiene': '#4ECDC4'}
+                data_traces = []
+                unique_months = sorted(monthly_reviews['month_year'].unique())
+                for cat in monthly_reviews['category'].unique():
+                    cat_data = monthly_reviews[monthly_reviews['category'] == cat]
+                    data_traces.append(go.Bar(
+                        x=unique_months,
+                        y=[cat_data[cat_data['month_year'] == month]['reviews'].sum() if month in cat_data['month_year'].values else 0 for month in unique_months],
+                        name=cat.capitalize(),
+                        marker_color=colors.get(cat, '#45B7D1')
+                    ))
+                fig = go.Figure(data=data_traces)
+                fig.update_layout(
+                    title=f"Total Reviews Per Month by {'Toothbrush' if category_filter == 'toothbrush' else 'Category'}",
+                    xaxis_title="Month",
+                    yaxis_title="Number of Reviews",
+                    height=500,
+                    width=700,
+                    barmode='group',
+                    showlegend=True
+                )
+                with st.chat_message("assistant"):
+                    st.plotly_chart(fig)
 
             elif "compared to" in prompt.lower() and "reviews" in prompt.lower():
+                if 'reviews' not in df.columns:
+                    st.warning("The 'reviews' column is not found in the data.")
+                    st.stop()
                 months = re.findall(r'\b(January|February|March|April|May|June|July|August|September|October|November|December)\b', prompt, re.IGNORECASE)
                 if len(months) >= 2:
                     month1, month2 = months[0], months[1]
@@ -259,27 +302,22 @@ if menu == "Insight Conversation":
                     month1_reviews = month1_data['reviews'].sum() if 'reviews' in month1_data.columns else 0
                     month2_reviews = month2_data['reviews'].sum() if 'reviews' in month2_data.columns else 0
 
-                    st.write(f"Debug: {month1} 2025 reviews: {month1_reviews}, {month2} 2025 reviews: {month2_reviews}")  # Debug output
                     messages = [
                         {
                             "role": "user",
                             "content": (
                                 f"Provide a friendly and concise comparison of the total number of reviews for the {category_filter or 'all'} category "
                                 f"between {month1} 2025 and {month2} 2025. The data shows {month1} 2025 had {month1_reviews} reviews, "
-                                f"and {month2} 2025 had {month2_reviews} reviews. Only use the provided numbers and do not hallucinate data. "
-                                f"Example: 'Hey! The total number of reviews for the {category_filter or 'all'} category in {month1} 2025 was {month1_reviews}, compared to {month2_reviews} in {month2} 2025!'"
+                                f"and {month2} 2025 had {month2_reviews} reviews. "
+                                f"Example: 'Hey! The total number of reviews for the toothbrush category in {month1} 2025 was {month1_reviews}, compared to {month2_reviews} in {month2} 2025!'"
                             )
                         }
                     ]
                     response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                    response_message = response.choices[0].message.content
-                    st.session_state.messages_insight.append({"role": "assistant", "content": response_message})
+                    st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
                     with st.chat_message("assistant"):
-                        st.write(response_message)
+                        st.write(response.choices[0].message.content)
 
-                    # Append analysis results to chat history
-                    analysis_message = f"### Analysis Results\n{month1} 2025: {month1_reviews} reviews\n{month2} 2025: {month2_reviews} reviews"
-                    st.session_state.messages_insight.append({"role": "assistant", "content": analysis_message})
                     with st.chat_message("assistant"):
                         st.write("### Analysis Results")
                         st.write(f"{month1} 2025: {month1_reviews} reviews")
@@ -295,76 +333,12 @@ if menu == "Insight Conversation":
                         height=500,
                         width=700
                     )
-                    st.session_state.messages_insight.append({"role": "assistant", "content": "Graph: Reviews Comparison"})
                     with st.chat_message("assistant"):
                         st.plotly_chart(fig)
 
-            elif "total number of reviews per month" in prompt.lower():
-                if 'reviews' not in df.columns:
-                    st.warning("The 'reviews' column is not found in the uploaded data.")
-                    st.stop()
-                monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
-                openai_data = monthly_reviews.to_string()
-                messages = [
-                    {
-                        "role": "user",
-                        "content": (
-                            f"Based on the provided data, provide a friendly and concise summary of the total number of reviews per month for the {category_filter or 'all'} category. "
-                            f"Use the following grouped data with columns: {list(monthly_reviews.columns)}. "
-                            f"Data:\n{openai_data}\n\n---\n\n {prompt} (e.g., 'Hey! The data shows a peak in January 2025 with 3000 reviews for {category_filter or 'all'}!')"
-                        )
-                    }
-                ]
-                response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                response_message = response.choices[0].message.content
-                st.session_state.messages_insight.append({"role": "assistant", "content": response_message})
-                with st.chat_message("assistant"):
-                    st.write(response_message)
-
-                monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
-                seen = set()
-                unique_results = []
-                for index, row in monthly_reviews.iterrows():
-                    key = (row['month_year'], row['category'])
-                    if key not in seen:
-                        unique_results.append(row)
-                        seen.add(key)
-                monthly_reviews = pd.DataFrame(unique_results)
-
-                analysis_message = f"### Analysis Results\n{monthly_reviews.to_string(index=False)}"
-                st.session_state.messages_insight.append({"role": "assistant", "content": analysis_message})
-                with st.chat_message("assistant"):
-                    st.write("### Analysis Results")
-                    st.table(monthly_reviews.style.format({'reviews': '{:,.0f}'}))
-
-                colors = {cat: '#FF6B6B' if i == 0 else '#4ECDC4' for i, cat in enumerate(monthly_reviews['category'].unique())}
-                data_traces = []
-                unique_months = sorted(monthly_reviews['month_year'].unique())
-                for cat in monthly_reviews['category'].unique():
-                    cat_data = monthly_reviews[monthly_reviews['category'] == cat]
-                    data_traces.append(go.Bar(
-                        x=unique_months,
-                        y=[cat_data[cat_data['month_year'] == month]['reviews'].sum() if month in cat_data['month_year'].values else 0 for month in unique_months],
-                        name=cat.capitalize(),
-                        marker_color=colors.get(cat, '#45B7D1')
-                    ))
-                fig = go.Figure(data=data_traces)
-                fig.update_layout(
-                    title=f"Total Reviews Per Month by {category_filter.capitalize() if category_filter else 'All Categories'}",
-                    xaxis_title="Month",
-                    yaxis_title="Number of Reviews",
-                    height=500,
-                    width=700,
-                    barmode='group',
-                    showlegend=True
-                )
-                st.session_state.messages_insight.append({"role": "assistant", "content": "Graph: Total Reviews Per Month"})
-                with st.chat_message("assistant"):
-                    st.plotly_chart(fig)
-
             elif "reviews" in prompt.lower() and ("last month" in prompt.lower() or "this month" in prompt.lower()):
                 if 'reviews' not in df.columns:
-                    st.warning("The 'reviews' column is not found in the uploaded data.")
+                    st.warning("The 'reviews' column is not found in the data.")
                     st.stop()
                 current_date = datetime.now()
                 current_month = current_date.month
@@ -372,8 +346,8 @@ if menu == "Insight Conversation":
                 last_month_year = current_year - 1 if current_month == 1 else current_year
                 last_month = 12 if current_month == 1 else current_month - 1
 
-                category = category_filter
-                df_filtered = df[df['category'].str.lower().str.contains(category.lower(), na=False)] if category else df
+                category = "toothbrush" if "toothbrush" in prompt.lower() else None
+                df_filtered = df[df['category'].str.lower().str.contains("toot?brush", na=False)] if category else df
 
                 this_month_data = df_filtered[
                     (df_filtered['date'].dt.month == current_month) & 
@@ -393,19 +367,16 @@ if menu == "Insight Conversation":
                         "content": (
                             f"Provide a friendly and concise comparison of the total number of reviews for the {category_filter or 'all'} category "
                             f"between last month and this month. The data shows last month had {last_month_reviews} reviews, "
-                            f"and this month had {this_month_reviews} reviews. Only use the provided numbers and do not hallucinate data. "
-                            f"Example: 'Hey! Last month had {last_month_reviews} reviews, while this month has {this_month_reviews} for the {category_filter or 'all'} category!'"
+                            f"and this month had {this_month_reviews} reviews. "
+                            f"Example: 'Hey! Last month had {last_month_reviews} reviews, while this month has {this_month_reviews} for the toothbrush category!'"
                         )
                     }
                 ]
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                response_message = response.choices[0].message.content
-                st.session_state.messages_insight.append({"role": "assistant", "content": response_message})
+                st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
                 with st.chat_message("assistant"):
-                    st.write(response_message)
+                    st.write(response.choices[0].message.content)
 
-                analysis_message = f"### Analysis Results\nThis Month: {this_month_reviews} reviews\nLast Month: {last_month_reviews} reviews"
-                st.session_state.messages_insight.append({"role": "assistant", "content": analysis_message})
                 with st.chat_message("assistant"):
                     st.write("### Analysis Results")
                     st.write(f"This Month: {this_month_reviews} reviews")
@@ -415,13 +386,12 @@ if menu == "Insight Conversation":
                     go.Bar(x=['Last Month', 'This Month'], y=[last_month_reviews, this_month_reviews], marker_color=['#FF6B6B', '#4ECDC4'])
                 ])
                 fig.update_layout(
-                    title=f"Reviews Comparison - {category_filter if category_filter else 'All Categories'}",
+                    title=f"Reviews Comparison - {category if category else 'All Categories'}",
                     xaxis_title="Period",
                     yaxis_title="Number of Reviews",
                     height=500,
                     width=700
                 )
-                st.session_state.messages_insight.append({"role": "assistant", "content": "Graph: Reviews Comparison"})
                 with st.chat_message("assistant"):
                     st.plotly_chart(fig)
 
@@ -435,7 +405,7 @@ if menu == "Insight Conversation":
                 if not metric:
                     metric = "reviews" if "reviews" in df.columns else None
                     if not metric:
-                        st.warning("No 'sales' or 'reviews' column found in the uploaded data.")
+                        st.warning("No 'sales' or 'reviews' column found in the data.")
                         st.stop()
                 group_column = entity.lower() if entity.lower() in df.columns else "SKU"
                 if group_column not in df.columns:
@@ -449,38 +419,31 @@ if menu == "Insight Conversation":
                     st.warning(f"No valid {metric} data available for {entity}s.")
                     st.stop()
 
-                analysis_results = []
-                for month_year in entity_metrics['month_year'].unique():
-                    month_data = entity_metrics[entity_metrics['month_year'] == month_year]
-                    max_value = month_data[metric].max()
-                    most_entities = month_data[month_data[metric] == max_value][group_column].tolist()
-                    most_entities_str = ", ".join(most_entities) if len(most_entities) > 1 else most_entities[0]
-
-                    min_value = month_data[month_data[metric] > 0][metric].min() if (month_data[metric] > 0).any() else 0
-                    least_entities = month_data[month_data[metric] == min_value][group_column].tolist() if min_value > 0 else [None]
-                    least_entities_str = ", ".join(filter(None, least_entities)) if len(least_entities) > 1 else (least_entities[0] if least_entities[0] else "None")
-
-                    analysis_results.append(f"{month_year}: Most {metric}: {most_entities_str} ({max_value}), Least {metric}: {least_entities_str} ({min_value if min_value > 0 else 0})")
-
-                analysis_message = f"### Analysis Results\n" + "\n".join(analysis_results)
-                st.session_state.messages_insight.append({"role": "assistant", "content": analysis_message})
                 with st.chat_message("assistant"):
                     st.write("### Analysis Results")
-                    for result in analysis_results:
-                        st.write(result)
+                    for month_year in entity_metrics['month_year'].unique():
+                        month_data = entity_metrics[entity_metrics['month_year'] == month_year]
+                        max_value = month_data[metric].max()
+                        most_entities = month_data[month_data[metric] == max_value][group_column].tolist()
+                        most_entities_str = ", ".join(most_entities) if len(most_entities) > 1 else most_entities[0]
+
+                        min_value = month_data[month_data[metric] > 0][metric].min() if (month_data[metric] > 0).any() else 0
+                        least_entities = month_data[month_data[metric] == min_value][group_column].tolist() if min_value > 0 else [None]
+                        least_entities_str = ", ".join(filter(None, least_entities)) if len(least_entities) > 1 else (least_entities[0] if least_entities[0] else "None")
+
+                        st.write(f"{month_year}: Most {metric}: {most_entities_str} ({max_value}), Least {metric}: {least_entities_str} ({min_value if min_value > 0 else 0})")
 
             else:
                 messages = [
                     {
                         "role": "user",
-                        "content": f"Provide a friendly response. I don’t fully understand your question about the data. Could you please ask about reviews, sales, or specific months? For example, 'What were the total number of reviews per month?' or 'Which SKU had the most sales?'"
+                        "content": f"Provide a friendly response. I don’t fully understand your question about the data. Could you please ask about reviews, sales, or specific months? For example, 'What were the total number of reviews per month?' or 'Which SKU had the most sales?' Or upload a CSV file to start!"
                     }
                 ]
                 response = client.chat.completions.create(model="gpt-4o", messages=messages)
-                response_message = response.choices[0].message.content
-                st.session_state.messages_insight.append({"role": "assistant", "content": response_message})
+                st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
                 with st.chat_message("assistant"):
-                    st.write(response_message)
+                    st.write(response.choices[0].message.content)
 
 elif menu == "Shopify Catalog Analysis":
     st.title("🛒 Shopify Catalog Analysis")
@@ -551,9 +514,7 @@ elif menu == "Shopify Catalog Analysis":
                         width=700,
                         showlegend=True
                     )
-                    st.session_state.messages_shopify.append({"role": "assistant", "content": "Graph: Stock Status"})
-                    with st.chat_message("assistant"):
-                        st.plotly_chart(fig)
+                    st.session_state.messages_shopify.append({"role": "assistant", "content": fig})
 
                 else:
                     messages = [
@@ -586,9 +547,7 @@ elif menu == "Shopify Catalog Analysis":
                         width=700,
                         showlegend=True
                     )
-                    st.session_state.messages_shopify.append({"role": "assistant", "content": "Graph: Stock Status"})
-                    with st.chat_message("assistant"):
-                        st.plotly_chart(fig)
+                    st.session_state.messages_shopify.append({"role": "assistant", "content": fig})
 
             elif "last month" in prompt.lower() and "this month" in prompt.lower():
                 current_date = datetime.now()
@@ -639,9 +598,7 @@ elif menu == "Shopify Catalog Analysis":
                     height=500,
                     width=700
                 )
-                st.session_state.messages_shopify.append({"role": "assistant", "content": "Graph: Product Updates Comparison"})
-                with st.chat_message("assistant"):
-                    st.plotly_chart(fig)
+                st.session_state.messages_shopify.append({"role": "assistant", "content": fig})
 
             else:
                 messages = [
