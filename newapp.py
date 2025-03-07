@@ -134,7 +134,7 @@ if "last_processed_prompt_shopify" not in st.session_state:
 if "uploader_at_bottom" not in st.session_state:
     st.session_state.uploader_at_bottom = False  # Track uploader position
 
-# Custom CSS to manage layout
+# Custom CSS to manage layout with dynamic padding
 st.markdown(
     """
     <style>
@@ -144,11 +144,11 @@ st.markdown(
         flex-direction: column;
         min-height: 100vh;
     }
-    /* Main content area should be scrollable with padding for footer */
+    /* Main content area should be scrollable with dynamic padding */
     .content {
         flex: 1;
         overflow-y: auto;
-        padding-bottom: 120px; /* Space for fixed footer when uploader moves */
+        padding-bottom: %(padding_bottom)s; /* Dynamic padding based on uploader position */
         box-sizing: border-box;
     }
     /* Fixed footer at the bottom */
@@ -175,7 +175,7 @@ st.markdown(
         margin-top: 0;
     }
     </style>
-    """,
+    """ % {"padding_bottom": "0px" if not st.session_state.uploader_at_bottom else "120px"},
     unsafe_allow_html=True
 )
 
@@ -243,7 +243,7 @@ if menu == "Insight Conversation":
                 df_filtered = df if category_filter is None else df[df['category'] == category_filter]
 
                 # Process the query
-                if "reviews per month" in prompt.lower():
+                if "total number of reviews per month" in prompt.lower() or "reviews per month for all categories" in prompt.lower():
                     monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
                     openai_data = monthly_reviews.to_string()
                     messages = [
@@ -263,7 +263,7 @@ if menu == "Insight Conversation":
                     assistant_messages = [msg for msg in st.session_state.messages_insight if msg["role"] == "assistant"]
                     if len(assistant_messages) >= 1 and not st.session_state.uploader_at_bottom:
                         st.session_state.uploader_at_bottom = True
-                        st.rerun()
+                        st.rerun()  # Rerun after all content is appended
 
                     monthly_reviews = df_filtered.groupby(['month_year', 'category'], as_index=False)['reviews'].sum()
                     seen = set()
