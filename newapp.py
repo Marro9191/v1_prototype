@@ -133,9 +133,10 @@ st.markdown(
     """
     <style>
     .main-content {
-        padding-bottom: 150px; /* Increased padding to ensure no scrolling needed */
-        z-index: 1;
-        min-height: calc(100vh - 150px); /* Adjust height to fit viewport */
+        padding-bottom: 60px; /* Match the height of the input container */
+        min-height: 0; /* Remove fixed min-height to avoid extra space */
+        max-height: calc(100vh - 60px); /* Constrain content height */
+        overflow-y: auto; /* Enable scrolling within content if needed */
     }
     .input-container {
         position: fixed !important;
@@ -150,10 +151,11 @@ st.markdown(
         flex-direction: row !important;
         align-items: center !important;
         gap: 10px !important;
+        height: 60px !important; /* Fixed height for the input container */
     }
     .stFileUploader {
         flex: 1 !important;
-        max-width: 40% !important; /* Limit uploader width */
+        max-width: 40% !important;
         margin: 0 !important;
         padding: 0 !important;
     }
@@ -164,7 +166,7 @@ st.markdown(
     }
     .stChatInput {
         flex: 1 !important;
-        max-width: 60% !important; /* Chat input takes remaining space */
+        max-width: 60% !important;
         margin: 0 !important;
         padding: 0 !important;
     }
@@ -173,7 +175,10 @@ st.markdown(
     }
     /* Ensure main content stays above input areas */
     .stApp {
-        overflow: auto !important;
+        overflow: hidden !important; /* Prevent default scrolling */
+    }
+    .stApp > div {
+        height: 100vh !important; /* Constrain app height to viewport */
     }
     </style>
     """,
