@@ -157,6 +157,15 @@ st.markdown(
     .stFileUploader {
         margin-bottom: 5px;  /* Reduced space between uploader and chat input */
     }
+    /* Ensure footer stays at bottom with enough content */
+    .stApp > div {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+    }
+    .stApp > div > .content {
+        flex: 1;
+    }
     </style>
     """,
     unsafe_allow_html=True
@@ -172,7 +181,7 @@ if menu == "Insight Conversation":
     response_container = st.container()
     with response_container:
         if not st.session_state.messages_insight:
-            st.write("Responses will appear here.")
+            pass  # Removed "Responses will appear here."
         for idx, message in enumerate(st.session_state.messages_insight):
             with st.chat_message(message["role"]):
                 if isinstance(message["content"], go.Figure):
@@ -404,7 +413,7 @@ if menu == "Insight Conversation":
                     st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
-# Shopify Catalog Analysis (unchanged)
+# Shopify Catalog Analysis
 elif menu == "Shopify Catalog Analysis":
     st.title("🛒 Shopify Catalog Analysis")
     st.write("Analyze your Shopify catalog data. Query stock levels, product updates, or other metrics as needed.")
