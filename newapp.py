@@ -140,11 +140,11 @@ st.markdown(
         display: flex;
         flex-direction: column;
         min-height: 100vh;
+        position: relative;
     }
     .content {
-        flex: 1;
-        min-height: calc(100vh - 150px);  /* Ensure content takes up enough space */
-        padding-bottom: 150px;  /* Space for fixed footer */
+        flex: 1 0 auto;
+        padding-bottom: 100px;  /* Reduced to match footer height */
     }
     .footer {
         flex-shrink: 0;
@@ -154,9 +154,15 @@ st.markdown(
         background-color: #f0f2f6;
         padding: 10px;
         z-index: 1000;
+        height: 90px;  /* Fixed height for footer to match padding */
     }
     .stFileUploader {
-        margin-bottom: 5px;  /* Reduced space between uploader and chat input */
+        margin-bottom: 5px;  /* Space between uploader and chat input */
+    }
+    /* Ensure footer doesn't require scrolling */
+    body {
+        margin: 0;
+        padding: 0;
     }
     </style>
     """,
