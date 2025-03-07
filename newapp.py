@@ -127,16 +127,18 @@ if "messages_shopify" not in st.session_state:
     st.session_state.messages_shopify = []
 if "df_insight" not in st.session_state:
     st.session_state.df_insight = pd.read_csv(io.StringIO(default_csv_data))
+if "uploaded_file_name" not in st.session_state:
+    st.session_state.uploaded_file_name = None
 
 # Custom CSS to enforce layout
 st.markdown(
     """
     <style>
     .main-content {
-        padding-bottom: 60px; /* Match the height of the input container */
-        min-height: 0; /* Remove fixed min-height to avoid extra space */
-        max-height: calc(100vh - 60px); /* Constrain content height */
-        overflow-y: auto; /* Enable scrolling within content if needed */
+        padding-bottom: 60px;
+        min-height: 0;
+        max-height: calc(100vh - 60px);
+        overflow-y: auto;
     }
     .input-container {
         position: fixed !important;
@@ -151,7 +153,7 @@ st.markdown(
         flex-direction: row !important;
         align-items: center !important;
         gap: 10px !important;
-        height: 60px !important; /* Fixed height for the input container */
+        height: 60px !important;
     }
     .stFileUploader {
         flex: 1 !important;
@@ -160,9 +162,13 @@ st.markdown(
         padding: 0 !important;
     }
     .stFileUploader > div {
-        height: 40px !important; /* Reduce uploader height */
+        height: 40px !important;
         display: flex !important;
         align-items: center !important;
+    }
+    /* Hide the default uploaded file display */
+    .stFileUploader > div > div:last-child {
+        display: none !important;
     }
     .stChatInput {
         flex: 1 !important;
@@ -171,14 +177,13 @@ st.markdown(
         padding: 0 !important;
     }
     .stChatInput > div > div {
-        height: 40px !important; /* Match uploader height */
+        height: 40px !important;
     }
-    /* Ensure main content stays above input areas */
     .stApp {
-        overflow: hidden !important; /* Prevent default scrolling */
+        overflow: hidden !important;
     }
     .stApp > div {
-        height: 100vh !important; /* Constrain app height to viewport */
+        height: 100vh !important;
     }
     </style>
     """,
@@ -201,16 +206,20 @@ if menu == "Insight Conversation":
     # Input container with uploader and chat input side by side
     with st.container():
         st.markdown('<div class="input-container">', unsafe_allow_html=True)
+        # Use a placeholder to manage uploader state
         uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
         if uploaded_file is not None:
-            df = pd.read_csv(uploaded_file)
-            st.session_state.df_insight = df
-            st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
-            with st.chat_message("user"):
-                st.write(f"Uploaded CSV file: {uploaded_file.name}")
-            st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
-            with st.chat_message("assistant"):
-                st.write("Great! I’ve loaded your CSV file. Feel free to ask questions about it!")
+            # Only process the upload if the file has changed
+            if st.session_state.uploaded_file_name != uploaded_file.name:
+                df = pd.read_csv(uploaded_file)
+                st.session_state.df_insight = df
+                st.session_state.uploaded_file_name = uploaded_file.name
+                st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
+                with st.chat_message("user"):
+                    st.write(f"Uploaded CSV file: {uploaded_file.name}")
+                st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
+                with st.chat_message("assistant"):
+                    st.write("Great! I’ve loaded your CSV file. Feel free to ask questions about it!")
 
         if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
             st.session_state.messages_insight.append({"role": "user", "content": prompt})
