@@ -186,7 +186,7 @@ menu = st.sidebar.radio("Menu", ["CSV Analysis", "Shopify Catalog Analysis"])
 # CSV Analysis tab
 if menu == "CSV Analysis":
     st.title("📄 CSV Analysis")
-    st.write("Chat with me about your data! Upload a CSV or ask about reviews, sales, or specific months. No default data is pre-loaded.")
+    st.write("Chat with me about your data! Upload a CSV or ask about reviews, sales, or specific months.")
 
     # File uploader at top by default
     if not st.session_state.uploader_at_bottom:
