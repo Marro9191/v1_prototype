@@ -128,72 +128,30 @@ if "messages_shopify" not in st.session_state:
 if "df_insight" not in st.session_state:
     st.session_state.df_insight = pd.read_csv(io.StringIO(default_csv_data))
 
-# Custom CSS to enforce layout
-st.markdown(
-    """
-    <style>
-    .main-content {
-        padding-bottom: 120px; /* Increased padding to accommodate uploader and chat input */
-        z-index: 1;
-        min-height: 100vh; /* Ensure content takes full height */
-    }
-    .uploader-wrapper {
-        position: fixed !important;
-        bottom: 60px !important; /* Position above the chat input */
-        left: 10px !important;
-        width: 40% !important; /* Adjust width to fit alongside chat input */
-        z-index: 1002 !important;
-    }
-    .stFileUploader {
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-    .stChatInput {
-        position: fixed !important;
-        bottom: 0 !important;
-        left: 50% !important; /* Start from the middle */
-        right: 10px !important; /* End at the right edge with some padding */
-        width: calc(50% - 20px) !important; /* Adjust width to fit alongside uploader */
-        z-index: 1003 !important;
-    }
-    /* Ensure main content stays above input areas */
-    .stApp {
-        overflow: auto !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
 # Display chat interface based on selected tab
 if menu == "Insight Conversation":
     st.title("📄 Comcore Prototype v1")
     st.write("Chat with me about your data! Upload a CSV or ask about reviews, sales, or specific months. Default data is pre-loaded.")
 
     # Display chat messages for Insight Conversation
-    with st.container():
-        st.markdown('<div class="main-content">', unsafe_allow_html=True)
-        for message in st.session_state.messages_insight:
-            with st.chat_message(message["role"]):
-                st.write(message["content"])
-        st.markdown('</div>', unsafe_allow_html=True)
+    for message in st.session_state.messages_insight:
+        with st.chat_message(message["role"]):
+            st.write(message["content"])
 
-    # File uploader positioned above the chat input
-    with st.container():
-        st.markdown('<div class="uploader-wrapper">', unsafe_allow_html=True)
-        uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
-        if uploaded_file is not None:
-            df = pd.read_csv(uploaded_file)
-            st.session_state.df_insight = df
-            st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
-            with st.chat_message("user"):
-                st.write(f"Uploaded CSV file: {uploaded_file.name}")
-            st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
-            with st.chat_message("assistant"):
-                st.write("Great! I’ve loaded your CSV file. Feel free to ask questions about it!")
-        st.markdown('</div>', unsafe_allow_html=True)
+    # Chat input for Insight Conversation and file uploader placed just above it
+    # File uploader
+    uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
+    if uploaded_file is not None:
+        df = pd.read_csv(uploaded_file)
+        st.session_state.df_insight = df
+        st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
+        with st.chat_message("user"):
+            st.write(f"Uploaded CSV file: {uploaded_file.name}")
+        st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
+        with st.chat_message("assistant"):
+            st.write("Great! I’ve loaded your CSV file. Feel free to ask questions about it!")
 
-    # Chat input at the bottom
+    # Chat input
     if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
         st.session_state.messages_insight.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
@@ -274,6 +232,7 @@ if menu == "Insight Conversation":
                 st.plotly_chart(fig)
 
         elif "compared to" in prompt.lower() and "reviews" in prompt.lower():
+            # Extract the two months from the query
             months = re.findall(r'\b(January|February|March|April|May|June|July|August|September|October|November|December)\b', prompt, re.IGNORECASE)
             if len(months) >= 2:
                 month1, month2 = months[0], months[1]
