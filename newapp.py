@@ -127,99 +127,60 @@ if "messages_shopify" not in st.session_state:
     st.session_state.messages_shopify = []
 if "df_insight" not in st.session_state:
     st.session_state.df_insight = pd.read_csv(io.StringIO(default_csv_data))
-
-# Custom CSS to enforce layout
-st.markdown(
-    """
-    <style>
-    .main-content {
-        padding-bottom: 70px; /* Match the height of the input container */
-        min-height: 0; /* Remove fixed min-height to avoid extra space */
-        max-height: calc(100vh - 70px); /* Constrain content height */
-        overflow-y: auto; /* Enable scrolling within content if needed */
-    }
-    .input-container {
-        position: fixed !important;
-        bottom: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        background-color: white !important;
-        padding: 10px !important;
-        z-index: 1003 !important;
-        border-top: 1px solid #ccc !important;
-        display: flex !important;
-        flex-direction: row !important;
-        align-items: center !important;
-        gap: 10px !important;
-        height: 70px !important; /* Adjusted for taller content */
-    }
-    .stFileUploader {
-        width: 40% !important; /* Reverted to earlier 40% width */
-        min-width: 200px !important; /* Prevent collapse on smaller screens */
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-    .stFileUploader > div {
-        height: 50px !important; /* Match desired height */
-        display: flex !important;
-        align-items: center !important;
-        overflow: hidden !important;
-    }
-    .stChatInput {
-        width: 60% !important; /* Reverted to earlier 60% width */
-        min-width: 300px !important; /* Prevent collapse on smaller screens */
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-    .stChatInput > div > div {
-        height: 50px !important; /* Match desired height */
-        display: flex !important;
-        align-items: center !important;
-        overflow: hidden !important;
-    }
-    /* Ensure main content stays above input areas */
-    .stApp {
-        overflow: hidden !important; /* Prevent default scrolling */
-    }
-    .stApp > div {
-        height: 100vh !important; /* Constrain app height to viewport */
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+if "file_uploaded" not in st.session_state:
+    st.session_state.file_uploaded = False
+if "last_prompt" not in st.session_state:
+    st.session_state.last_prompt = None
 
 # Display chat interface based on selected tab
 if menu == "Insight Conversation":
     st.title("📄 Comcore Prototype v1")
     st.write("Chat with me about your data! Upload a CSV or ask about reviews, sales, or specific months. Default data is pre-loaded.")
 
-    # Display chat messages for Insight Conversation
-    with st.container():
-        st.markdown('<div class="main-content">', unsafe_allow_html=True)
-        for message in st.session_state.messages_insight:
-            with st.chat_message(message["role"]):
+    # Render all chat messages and analysis results in the main content area
+    for message in st.session_state.messages_insight:
+        with st.chat_message(message["role"]):
+            if isinstance(message["content"], str):
                 st.write(message["content"])
-        st.markdown('</div>', unsafe_allow_html=True)
+            elif isinstance(message["content"], go.Figure):
+                st.plotly_chart(message["content"])
 
-    # Input container with uploader and chat input side by side
+    # Add spacing to push the input section to the bottom
+    st.markdown("<div style='height: 50vh;'></div>", unsafe_allow_html=True)
+
+    # Fixed container for file uploader and chat input at the bottom
     with st.container():
-        st.markdown('<div class="input-container">', unsafe_allow_html=True)
+        st.markdown(
+            """
+            <style>
+            .stContainer {
+                position: fixed;
+                bottom: 0;
+                width: 100%;
+                background: white;
+                padding: 10px;
+                z-index: 100;
+                box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+            }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+
+        # File uploader with a flag to prevent continuous reruns
         uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
-        if uploaded_file is not None:
+        if uploaded_file and not st.session_state.file_uploaded:
             df = pd.read_csv(uploaded_file)
             st.session_state.df_insight = df
             st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
-            with st.chat_message("user"):
-                st.write(f"Uploaded CSV file: {uploaded_file.name}")
             st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
-            with st.chat_message("assistant"):
-                st.write("Great! I’ve loaded your CSV file. Feel free to ask questions about it!")
+            st.session_state.file_uploaded = True  # Set flag to prevent reprocessing
 
-        if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
+        # Chat input
+        prompt = st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')")
+        if prompt and prompt != st.session_state.last_prompt:
             st.session_state.messages_insight.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.write(prompt)
+            st.session_state.last_prompt = prompt  # Update last prompt to avoid reprocessing
 
             # Load and process data
             df = st.session_state.df_insight
@@ -227,7 +188,7 @@ if menu == "Insight Conversation":
             if df['date'].isna().all():
                 st.warning("No valid dates found in the 'date' column. Please ensure dates are in DD/MM/YYYY format.")
                 st.stop()
-            st.write(f"Loaded {len(df)} rows from {'uploaded CSV' if 'uploaded_file' in locals() else 'default data'}.")  # Debug row count
+            st.write(f"Loaded {len(df)} rows from {'uploaded CSV' if st.session_state.file_uploaded else 'default data'}.")  # Debug row count
             df['month_year'] = df['date'].dt.strftime('%B %Y')
             df['category'] = df['category'].str.lower().replace("tootbrush", "toothbrush")
 
@@ -292,10 +253,12 @@ if menu == "Insight Conversation":
                     barmode='group',
                     showlegend=True
                 )
+                st.session_state.messages_insight.append({"role": "assistant", "content": fig})
                 with st.chat_message("assistant"):
                     st.plotly_chart(fig)
 
             elif "compared to" in prompt.lower() and "reviews" in prompt.lower():
+                # Extract the two months from the query
                 months = re.findall(r'\b(January|February|March|April|May|June|July|August|September|October|November|December)\b', prompt, re.IGNORECASE)
                 if len(months) >= 2:
                     month1, month2 = months[0], months[1]
@@ -336,6 +299,7 @@ if menu == "Insight Conversation":
                         height=500,
                         width=700
                     )
+                    st.session_state.messages_insight.append({"role": "assistant", "content": fig})
                     with st.chat_message("assistant"):
                         st.plotly_chart(fig)
 
@@ -392,6 +356,7 @@ if menu == "Insight Conversation":
                     height=500,
                     width=700
                 )
+                st.session_state.messages_insight.append({"role": "assistant", "content": fig})
                 with st.chat_message("assistant"):
                     st.plotly_chart(fig)
 
@@ -450,13 +415,15 @@ elif menu == "Shopify Catalog Analysis":
     # Display chat messages for Shopify Catalog Analysis
     for message in st.session_state.messages_shopify:
         with st.chat_message(message["role"]):
-            st.write(message["content"])
+            if isinstance(message["content"], str):
+                st.write(message["content"])
+            elif isinstance(message["content"], go.Figure):
+                st.plotly_chart(message["content"])
 
     # Chat input for Shopify Catalog Analysis
     if prompt := st.chat_input("Ask me about your Shopify catalog! (e.g., 'Which products are out of stock, and how many?')"):
         st.session_state.messages_shopify.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.write(prompt)
+        st.rerun()  # Rerun to refresh the display with the new prompt
 
         with st.spinner("Fetching Shopify catalog data via GraphQL..."):
             df = fetch_shopify_products()
@@ -496,7 +463,6 @@ elif menu == "Shopify Catalog Analysis":
                     st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                     with st.chat_message("assistant"):
                         st.write(response.choices[0].message.content)
-                    st.rerun()
 
                     fig = go.Figure(data=[
                         go.Pie(
@@ -514,6 +480,8 @@ elif menu == "Shopify Catalog Analysis":
                         showlegend=True
                     )
                     st.session_state.messages_shopify.append({"role": "assistant", "content": fig})
+                    with st.chat_message("assistant"):
+                        st.plotly_chart(fig)
 
                 else:
                     messages = [
@@ -529,7 +497,6 @@ elif menu == "Shopify Catalog Analysis":
                     st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                     with st.chat_message("assistant"):
                         st.write(response.choices[0].message.content)
-                    st.rerun()
 
                     fig = go.Figure(data=[
                         go.Pie(
@@ -547,6 +514,8 @@ elif menu == "Shopify Catalog Analysis":
                         showlegend=True
                     )
                     st.session_state.messages_shopify.append({"role": "assistant", "content": fig})
+                    with st.chat_message("assistant"):
+                        st.plotly_chart(fig)
 
             elif "last month" in prompt.lower() and "this month" in prompt.lower():
                 current_date = datetime.now()
@@ -585,7 +554,6 @@ elif menu == "Shopify Catalog Analysis":
                 st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                 with st.chat_message("assistant"):
                     st.write(response.choices[0].message.content)
-                st.rerun()
 
                 fig = go.Figure(data=[
                     go.Bar(x=['Last Month', 'This Month'], y=[last_month_count, this_month_count], marker_color=['#FF6B6B', '#4ECDC4'])
@@ -598,6 +566,8 @@ elif menu == "Shopify Catalog Analysis":
                     width=700
                 )
                 st.session_state.messages_shopify.append({"role": "assistant", "content": fig})
+                with st.chat_message("assistant"):
+                    st.plotly_chart(fig)
 
             else:
                 messages = [
@@ -614,4 +584,3 @@ elif menu == "Shopify Catalog Analysis":
                 st.session_state.messages_shopify.append({"role": "assistant", "content": response.choices[0].message.content})
                 with st.chat_message("assistant"):
                     st.write(response.choices[0].message.content)
-                st.rerun()
