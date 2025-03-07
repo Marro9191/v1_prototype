@@ -183,11 +183,10 @@ if menu == "Insight Conversation":
     # Fixed footer for file uploader and chat input
     st.markdown('<div class="footer">', unsafe_allow_html=True)
     uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"], key="insight_uploader", help="Upload your data file to analyze.")
-    if uploaded_file is not None and not any(msg["content"].startswith("Uploaded CSV file") for msg in st.session_state.messages_insight):
+    if uploaded_file is not None:
         df = pd.read_csv(uploaded_file)
         st.session_state.df_insight = df
-        st.session_state.messages_insight.append({"role": "user", "content": f"Uploaded CSV file: {uploaded_file.name}"})
-        st.session_state.messages_insight.append({"role": "assistant", "content": "Great! I’ve loaded your CSV file. Feel free to ask questions about it!"})
+        # Removed the "Great! I've loaded..." message as per request
 
     if prompt := st.chat_input("Ask me about your data! (e.g., 'What were the total number of reviews per month?')"):
         # Only append user prompt if it's not a duplicate
@@ -404,7 +403,7 @@ if menu == "Insight Conversation":
                     st.session_state.messages_insight.append({"role": "assistant", "content": response.choices[0].message.content})
     st.markdown('</div>', unsafe_allow_html=True)
 
-# Shopify Catalog Analysis (unchanged with similar duplication prevention)
+# Shopify Catalog Analysis (unchanged with similar adjustments)
 elif menu == "Shopify Catalog Analysis":
     st.title("🛒 Shopify Catalog Analysis")
     st.write("Chat with me about your Shopify catalog! Ask about stock levels or product updates.")
